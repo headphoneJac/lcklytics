@@ -1,26 +1,42 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-bg: #0b0f14;
+  --color-surface: #151c24;
+  --color-blue-side: #2e7de1;
+  --color-red-side: #e2483b;
+  --color-gold: #c9a227;
+  --color-ink: #e6e9ef;
+  --color-ink-muted: #8a93a3;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* These reference the CSS variables next/font injects in layout.tsx */
+  --font-display: var(--font-rajdhani), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
+  --font-stat: var(--font-jetbrains), monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Ambient glow: soft blue-side / red-side / gold radial washes, fixed so
+   they stay put while the page scrolls. Deliberately subtle — this is one
+   restrained effect, not a loud gradient background. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 800px 500px at 12% -10%,
+      color-mix(in srgb, var(--color-blue-side) 20%, transparent), transparent 60%),
+    radial-gradient(ellipse 800px 500px at 92% 5%,
+      color-mix(in srgb, var(--color-red-side) 16%, transparent), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 50% 110%,
+      color-mix(in srgb, var(--color-gold) 10%, transparent), transparent 70%);
+  pointer-events: none;
 }

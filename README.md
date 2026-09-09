@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# lcklytics
 
-## Getting Started
+LCK analytics dashboard built with Next.js and Supabase.
 
-First, run the development server:
+## Dashboard
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Oracle's Elixir Updater
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run the log table SQL once in Supabase:
 
-## Learn More
+```sql
+-- sql/etl_update_log.sql
+```
 
-To learn more about Next.js, take a look at the following resources:
+Add write credentials locally in your shell or `.env.local`. The dashboard can
+keep using the public anon key, but the updater needs a server-only secret key
+because it writes/upserts data. A legacy `service_role` key still works, but
+Supabase now recommends `sb_secret_...` keys for backend jobs.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+SUPABASE_URL="https://your-project.supabase.co"
+SUPABASE_SECRET_KEY="sb_secret_..."
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Then run the updater with either a direct CSV/download URL:
 
-## Deploy on Vercel
+```bash
+npm run update:data -- --source-url "https://drive.usercontent.google.com/download?id=FILE_ID&export=download&confirm=t"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+or a Google Drive file id:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run update:data -- --drive-file-id "FILE_ID"
+```
+
+Regular Google Drive share links also work; the updater converts the file id
+into a download URL.
+
+Useful flags:
+
+```bash
+npm run update:data -- --source-file "C:\path\to\2026_LoL_esports_match_data_from_OraclesElixir.csv"
+npm run update:data -- --dry-run --source-file "C:\path\to\file.csv"
+npm run update:data -- --force --drive-file-id "FILE_ID"
+npm run update:data -- --keep-raw --drive-file-id "FILE_ID"
+```
+
+What it does:
+
+- downloads or reads the Oracle's Elixir CSV
+- filters to domestic `league = LCK` rows with a non-empty split
+- exits as a no-op when the file hash is unchanged or the latest LCK `game_id`
+  is already loaded
+- normalizes into `games`, `teams`, `players`, `game_team_stats`,
+  `game_player_stats`, `draft_actions`, and `game_player_timeline`
+- upserts through Supabase REST
+- writes a local hash state under `data/state/` and attempts to insert an
+  `etl_update_log` row

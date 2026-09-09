@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# local ETL downloads/state
+/data
+
 # next.js
 /.next/
 /out/
