@@ -185,13 +185,14 @@ export interface HomeTeamGroup {
 
 export interface HomeBracketSeries {
   id: string
-  date: string
+  date?: string
   stage: string
+  match_label?: string
   team_a: string
   team_b: string
-  score_a: number
-  score_b: number
-  winner: string
+  score_a: number | string
+  score_b: number | string
+  winner?: string
 }
 
 export interface HomeSeasonOverview {

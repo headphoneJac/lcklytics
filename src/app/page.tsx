@@ -42,9 +42,6 @@ function StandingsTable({
     <div>
       <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-2">
         <h3 className="font-display text-xl font-bold text-ink">{title}</h3>
-        <p className="font-stat text-xs text-ink-muted">
-          {standings.length} teams
-        </p>
       </div>
 
       <div className="mt-3 overflow-x-auto">
@@ -115,13 +112,16 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
   const teamBWon = match.winner === match.team_b;
 
   return (
-    <article className="relative h-[58px] w-48">
-      <p className="mb-1 h-3 text-center font-stat text-[10px] leading-3 text-ink-muted">
-        {match.date}
+    <article
+      className="relative"
+      style={{ height: BRACKET_CARD_HEIGHT, width: BRACKET_CARD_WIDTH }}
+    >
+      <p className="mb-1 h-3 truncate text-center font-stat text-[9px] leading-3 text-ink-muted">
+        {match.match_label ? `${match.match_label}` : ""}
       </p>
-      <div className="overflow-hidden rounded border border-white/25 bg-background/70 font-stat text-sm tabular-nums">
+      <div className="overflow-hidden rounded border border-white/25 bg-background/70 font-stat text-xs tabular-nums">
         <div
-          className={`grid h-5 grid-cols-[1fr_2.25rem] items-center border-b border-white/15 ${
+          className={`grid h-[18px] grid-cols-[1fr_2rem] items-center border-b border-white/15 ${
             teamAWon ? "bg-emerald-900/70 text-ink" : "text-ink-muted"
           }`}
         >
@@ -133,7 +133,7 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
           </span>
         </div>
         <div
-          className={`grid h-5 grid-cols-[1fr_2.25rem] items-center ${
+          className={`grid h-[18px] grid-cols-[1fr_2rem] items-center ${
             teamBWon ? "bg-emerald-900/70 text-ink" : "text-ink-muted"
           }`}
         >
@@ -149,13 +149,13 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
   );
 }
 
-const BRACKET_CARD_WIDTH = 192;
-const BRACKET_CARD_HEIGHT = 58;
-const BRACKET_ROUND_GAP = 72;
-const BRACKET_ROW_STEP = 78;
-const BRACKET_HEADER_HEIGHT = 26;
-const BRACKET_PADDING_X = 16;
-const BRACKET_PADDING_Y = 16;
+const BRACKET_CARD_WIDTH = 148;
+const BRACKET_CARD_HEIGHT = 52;
+const BRACKET_ROUND_GAP = 52;
+const BRACKET_ROW_STEP = 62;
+const BRACKET_HEADER_HEIGHT = 24;
+const BRACKET_PADDING_X = 10;
+const BRACKET_PADDING_Y = 12;
 
 type BracketRound = {
   stage: string;
@@ -172,11 +172,9 @@ function bracketLayoutRows(rounds: BracketRound[]) {
   const countKey = rounds.map((round) => round.matches.length).join("-");
   const presets: Record<string, number[][]> = {
     "2-2-1": [[0, 1], [0, 1], [0.5]],
-    "1-2-2": [[0], [0, 3], [1.2, 4]],
-    "2-3-3-1-1": [[0.5, 1.5], [0, 1, 2], [2, 0, 1], [1.5], [0.5]],
+    "3-3-1-2-1": [[0.5, 1.5, 3], [0, 1, 2.5], [2], [0.5, 1.5], [1]],
     "1-1-2-1": [[1.5], [1.25], [0, 1], [0.5]],
-    "2-1": [[0, 1], [0.5]],
-    "2-3-2-2-1": [[0.5, 1.5], [0, 1, 2], [2, 0], [0, 1], [0.5]],
+    "2-1": [[0, 2], [1]],
   };
 
   const preset = presets[countKey];
@@ -240,9 +238,9 @@ function buildBracketConnectors(
         seen.add(connectorKey);
 
         const x1 = source.x + BRACKET_CARD_WIDTH;
-        const y1 = source.y + BRACKET_CARD_HEIGHT / 2;
+        const y1 = source.y + BRACKET_CARD_HEIGHT / 1.5;
         const x2 = target.x;
-        const y2 = target.y + BRACKET_CARD_HEIGHT / 2;
+        const y2 = target.y + BRACKET_CARD_HEIGHT / 1.5;
         const midX = x1 + (x2 - x1) / 2;
 
         connectors.push(`M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`);
@@ -306,7 +304,7 @@ function Bracket({
           {emptyText}
         </div>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-lg border border-white/10 bg-surface/40 p-4">
+        <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-surface/40 p-3">
           <div
             className="relative min-w-max"
             style={{ width: boardWidth, height: boardHeight }}

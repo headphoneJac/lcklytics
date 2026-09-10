@@ -1166,33 +1166,204 @@ function splitCupSeries(series: InternalSeries[]) {
   }
 }
 
-type BracketStageDefinition = {
-  name: string
-  count: number
+type BracketMatchDefinition = {
+  stage: string
+  teamA: string
+  teamB: string
+  label?: string
+  placeholderScore?: string
 }
 
-function toBracketSeriesByStage(
+function teamPairKey(teamA: string, teamB: string) {
+  return [teamA, teamB].sort().join('::')
+}
+
+function toBracketSeriesByPlan(
   series: InternalSeries[],
-  stageDefinitions: BracketStageDefinition[],
+  matchDefinitions: BracketMatchDefinition[],
 ): HomeBracketSeries[] {
-  const stageNames = stageDefinitions.flatMap((stage) =>
-    Array.from({ length: stage.count }, () => stage.name),
-  )
+  const seriesByPair = new Map<string, InternalSeries[]>()
+  const bracketSeries: HomeBracketSeries[] = []
 
-  return series.map((result, index) => ({
-    id: result.id,
-    date: result.date,
-    stage:
-      stageNames[index] ??
-      stageDefinitions[stageDefinitions.length - 1]?.name ??
-      'Bracket',
-    team_a: displayTeamName(result.teamA),
-    team_b: displayTeamName(result.teamB),
-    score_a: result.scoreA,
-    score_b: result.scoreB,
-    winner: displayTeamName(result.winner),
-  }))
+  for (const result of series) {
+    const key = teamPairKey(result.teamA, result.teamB)
+    const current = seriesByPair.get(key) ?? []
+    current.push(result)
+    seriesByPair.set(key, current)
+  }
+
+  matchDefinitions.forEach((definition, index) => {
+    const key = teamPairKey(definition.teamA, definition.teamB)
+    const matchingSeries = seriesByPair.get(key)
+    const result = matchingSeries?.shift()
+
+    if (!result) {
+      if (definition.placeholderScore) {
+        bracketSeries.push({
+          id: `placeholder:${definition.stage}:${index}`,
+          stage: definition.stage,
+          match_label: definition.label,
+          team_a: displayTeamName(definition.teamA),
+          team_b: displayTeamName(definition.teamB),
+          score_a: definition.placeholderScore,
+          score_b: definition.placeholderScore,
+        })
+      }
+
+      return
+    }
+
+    const definitionTeamAWon = result.winner === definition.teamA
+    const resultTeamAIsDefinitionTeamA = result.teamA === definition.teamA
+    const scoreA = resultTeamAIsDefinitionTeamA ? result.scoreA : result.scoreB
+    const scoreB = resultTeamAIsDefinitionTeamA ? result.scoreB : result.scoreA
+
+    bracketSeries.push({
+      id: result.id,
+      date: result.date,
+      stage: definition.stage,
+      match_label: definition.label,
+      team_a: displayTeamName(definition.teamA),
+      team_b: displayTeamName(definition.teamB),
+      score_a: scoreA,
+      score_b: scoreB,
+      winner: displayTeamName(
+        definitionTeamAWon ? definition.teamA : definition.teamB,
+      ),
+    })
+  })
+
+  return bracketSeries
 }
+
+const CUP_PLAY_IN_BRACKET: BracketMatchDefinition[] = [
+  { stage: 'Round 1', teamA: 'Kiwoom DRX', teamB: 'HANJIN BRION' },
+  { stage: 'Round 1', teamA: 'KT Rolster', teamB: 'DN SOOPers' },
+  {
+    stage: 'Round 2',
+    teamA: 'Dplus Kia',
+    teamB: 'Kiwoom DRX',
+    label: 'Qualification Match',
+  },
+  {
+    stage: 'Round 2',
+    teamA: 'Nongshim RedForce',
+    teamB: 'DN SOOPers',
+    label: 'Qualification Match',
+  },
+  {
+    stage: 'Round 3',
+    teamA: 'Kiwoom DRX',
+    teamB: 'Nongshim RedForce',
+    label: 'Qualification Match',
+  },
+]
+
+const CUP_PLAYOFF_BRACKET: BracketMatchDefinition[] = [
+  { stage: 'Round 1', teamA: 'BNK FEARX', teamB: 'DN SOOPers' },
+  { stage: 'Round 1', teamA: 'Dplus Kia', teamB: 'Kiwoom DRX' },
+  {
+    stage: 'Round 1',
+    teamA: 'DN SOOPers',
+    teamB: 'Kiwoom DRX',
+    label: "Losers' Bracket",
+  },
+  { stage: 'Round 2', teamA: 'Gen.G', teamB: 'Dplus Kia' },
+  { stage: 'Round 2', teamA: 'T1', teamB: 'BNK FEARX' },
+  {
+    stage: 'Round 2',
+    teamA: 'Dplus Kia',
+    teamB: 'DN SOOPers',
+    label: 'R2 Lower Seed',
+  },
+  {
+    stage: 'Round 3',
+    teamA: 'T1',
+    teamB: 'Dplus Kia',
+    label: 'R2 Higher Seed',
+  },
+  { stage: 'Round 4', teamA: 'Gen.G', teamB: 'BNK FEARX' },
+  {
+    stage: 'Round 4',
+    teamA: 'BNK FEARX',
+    teamB: 'Dplus Kia',
+    label: 'Lower Finals',
+  },
+  { stage: 'Finals', teamA: 'Gen.G', teamB: 'BNK FEARX' },
+]
+
+const ROAD_TO_MSI_BRACKET: BracketMatchDefinition[] = [
+  { stage: 'Round 1', teamA: 'Dplus Kia', teamB: 'HANJIN BRION' },
+  { stage: 'Round 2', teamA: 'KT Rolster', teamB: 'Dplus Kia' },
+  {
+    stage: 'Round 3',
+    teamA: 'Hanwha Life Esports',
+    teamB: 'T1',
+    label: 'Qualification Match',
+  },
+  { stage: 'Round 3', teamA: 'Gen.G', teamB: 'KT Rolster' },
+  {
+    stage: 'Round 4',
+    teamA: 'T1',
+    teamB: 'Gen.G',
+    label: 'Qualification Match',
+  },
+]
+
+const SEASON_PLAY_IN_BRACKET: BracketMatchDefinition[] = [
+  {
+    stage: 'Round 1',
+    teamA: 'KT Rolster',
+    teamB: 'HANJIN BRION',
+    label: 'Qualification Match',
+  },
+  { stage: 'Round 1', teamA: 'Nongshim RedForce', teamB: 'BNK FEARX' },
+  {
+    stage: 'Round 2',
+    teamA: 'HANJIN BRION',
+    teamB: 'BNK FEARX',
+    label: 'Qualification Match',
+  },
+]
+
+const SEASON_PLAYOFF_BRACKET: BracketMatchDefinition[] = [
+  { stage: 'Round 1', teamA: 'T1', teamB: 'BNK FEARX' },
+  { stage: 'Round 1', teamA: 'Dplus Kia', teamB: 'KT Rolster' },
+  {
+    stage: 'Round 1',
+    teamA: 'BNK FEARX',
+    teamB: 'Dplus Kia',
+    label: "Losers' Bracket",
+  },
+  { stage: 'Round 2', teamA: 'Gen.G', teamB: 'KT Rolster' },
+  { stage: 'Round 2', teamA: 'Hanwha Life Esports', teamB: 'T1' },
+  {
+    stage: 'Round 2',
+    teamA: 'KT Rolster',
+    teamB: 'Dplus Kia',
+    label: 'R2 Lower Seed',
+  },
+  {
+    stage: 'Round 3',
+    teamA: 'T1',
+    teamB: 'Dplus Kia',
+    label: 'R2 Higher Seed',
+  },
+  { stage: 'Round 4', teamA: 'Gen.G', teamB: 'Hanwha Life Esports' },
+  {
+    stage: 'Round 4',
+    teamA: 'Hanwha Life Esports',
+    teamB: 'T1',
+    label: 'Lower Finals',
+    placeholderScore: 'BO5',
+  },
+  {
+    stage: 'Grand Finals',
+    teamA: 'Gen.G',
+    teamB: 'TBD',
+    placeholderScore: 'BO5',
+  },
+]
 
 export async function getHomeSeasonOverview(): Promise<HomeSeasonOverview> {
   const [cupSeries, roundsOneTwoSeries, roadToMsiSeries, roundsThreeFourSeries, seasonFinalsSeries] =
@@ -1215,45 +1386,27 @@ export async function getHomeSeasonOverview(): Promise<HomeSeasonOverview> {
   return {
     cup: {
       groups: buildGroups(CUP_GROUPS, cup.group),
-      playIn: toBracketSeriesByStage(cup.playIn, [
-        { name: 'Round 1', count: 2 },
-        { name: 'Round 2', count: 2 },
-        { name: 'Round 3', count: 1 },
-      ]),
-      playoffs: toBracketSeriesByStage(cup.playoffs, [
-        { name: 'Round 1', count: 2 },
-        { name: 'Round 2', count: 3 },
-        { name: 'Round 3', count: 3 },
-        { name: 'Round 4', count: 1 },
-        { name: 'Finals', count: 1 },
-      ]),
+      playIn: toBracketSeriesByPlan(cup.playIn, CUP_PLAY_IN_BRACKET),
+      playoffs: toBracketSeriesByPlan(cup.playoffs, CUP_PLAYOFF_BRACKET),
     },
     roundsOneTwo: {
       standings: buildStandings(roundsOneTwoSeries),
     },
     roadToMsi: {
-      bracket: toBracketSeriesByStage(roadToMsiSeries, [
-        { name: 'Round 1', count: 1 },
-        { name: 'Round 2', count: 1 },
-        { name: 'Round 3', count: 2 },
-        { name: 'Round 4', count: 1 },
-      ]),
+      bracket: toBracketSeriesByPlan(roadToMsiSeries, ROAD_TO_MSI_BRACKET),
     },
     roundsThreeFour: {
       groups: buildGroups(ROUNDS_THREE_FOUR_GROUPS, cumulativeRoundsThreeFour),
     },
     seasonFinals: {
-      playIn: toBracketSeriesByStage(seasonPlayInSeries, [
-        { name: 'Round 1', count: 2 },
-        { name: 'Round 2', count: 1 },
-      ]),
-      playoffs: toBracketSeriesByStage(seasonPlayoffSeries, [
-        { name: 'Round 1', count: 2 },
-        { name: 'Round 2', count: 3 },
-        { name: 'Round 3', count: 2 },
-        { name: 'Round 4', count: 2 },
-        { name: 'Finals', count: 1 },
-      ]),
+      playIn: toBracketSeriesByPlan(
+        seasonPlayInSeries,
+        SEASON_PLAY_IN_BRACKET,
+      ),
+      playoffs: toBracketSeriesByPlan(
+        seasonPlayoffSeries,
+        SEASON_PLAYOFF_BRACKET,
+      ),
     },
   }
 }
