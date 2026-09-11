@@ -1,13 +1,17 @@
 import SplitSelector from "@/components/SplitSelector";
-import { getChampionProfiles, getSplitOptions } from "@/lib/queries";
-import { getSplitLabel, resolveSplitKey, type SplitSearchParams } from "@/lib/splits";
+import {
+  DEFAULT_SPLIT_KEY,
+  getChampionProfiles,
+  getTeamSplitOptions,
+} from "@/lib/queries";
+import {
+  getSplitLabel,
+  resolveSplitKey,
+  type SplitSearchParams,
+} from "@/lib/splits";
 import type { ChampionProfile } from "@/lib/types";
 
-type ChampionStatKey =
-  | "picks"
-  | "bans"
-  | "presence"
-  | "avg_dpm";
+type ChampionStatKey = "picks" | "bans" | "presence" | "avg_dpm";
 
 function formatPct(value: number) {
   return `${value.toFixed(1)}%`;
@@ -91,17 +95,24 @@ export default async function ChampionsPage({
 }: {
   searchParams?: SplitSearchParams;
 }) {
-  const splitKey = await resolveSplitKey(searchParams);
-  const [splits, champions] = await Promise.all([
-    getSplitOptions(),
-    getChampionProfiles(splitKey),
-  ]);
+  const requestedSplitKey = await resolveSplitKey(searchParams);
+  const splits = getTeamSplitOptions();
+  const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
+    ? requestedSplitKey
+    : DEFAULT_SPLIT_KEY;
+  const champions = await getChampionProfiles(splitKey);
   const currentSplit = getSplitLabel(splits, splitKey);
   const picked = champions.filter((champion) => champion.picks > 0).length;
   const banned = champions.filter((champion) => champion.bans > 0).length;
 
   return (
     <div className="flex flex-col gap-10">
+      <SplitSelector
+        splits={splits}
+        activeSplitKey={splitKey}
+        basePath="/champions"
+      />
+
       <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="font-stat text-sm text-ink-muted">Champions</p>
@@ -117,12 +128,6 @@ export default async function ChampionsPage({
           Scope: {currentSplit}
         </p>
       </section>
-
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/champions"
-      />
 
       <section className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
         <div className="border-l border-white/10 pl-4">
@@ -268,7 +273,9 @@ export default async function ChampionsPage({
                     {champion.picks ? champion.avg_dpm : "—"}
                   </td>
                   <td className="py-2 text-right text-ink-muted">
-                    {champion.picks ? formatPct(champion.avg_damage_share) : "—"}
+                    {champion.picks
+                      ? formatPct(champion.avg_damage_share)
+                      : "—"}
                   </td>
                   <td className="py-2 text-right text-ink-muted">
                     {champion.picks ? champion.avg_cspm.toFixed(1) : "—"}

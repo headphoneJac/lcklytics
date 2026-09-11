@@ -1,93 +1,4 @@
-import { getHomeSeasonOverview } from "@/lib/queries";
-import type {
-  HomeBracketSeries,
-  HomeStandingRow,
-  HomeTeamGroup,
-} from "@/lib/types";
-
-export const dynamic = "force-dynamic";
-
-function record(wins: number, losses: number) {
-  return `${wins}-${losses}`;
-}
-
-function SectionHeader({
-  eyebrow,
-  title,
-  description,
-}: {
-  eyebrow: string;
-  title: string;
-  description?: string;
-}) {
-  return (
-    <div>
-      <p className="font-stat text-sm text-ink-muted">{eyebrow}</p>
-      <h2 className="font-display text-4xl font-bold text-ink">{title}</h2>
-      {description ? (
-        <p className="mt-2 max-w-2xl text-sm text-ink-muted">{description}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function StandingsTable({
-  title,
-  standings,
-}: {
-  title: string;
-  standings: HomeStandingRow[];
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-2">
-        <h3 className="font-display text-xl font-bold text-ink">{title}</h3>
-      </div>
-
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[480px] text-sm">
-          <thead>
-            <tr className="border-b border-white/10 text-left text-ink-muted">
-              <th className="py-2 font-normal">Team</th>
-              <th className="py-2 text-right font-normal">Series</th>
-              <th className="py-2 text-right font-normal">Games</th>
-            </tr>
-          </thead>
-          <tbody className="font-stat tabular-nums">
-            {standings.map((team, index) => {
-              return (
-                <tr key={team.team} className="border-b border-white/5">
-                  <td className="py-2 font-body">
-                    <span className="mr-2 text-ink-muted">{index + 1}</span>
-                    {team.team}
-                  </td>
-                  <td className="py-2 text-right text-gold">
-                    {record(team.match_wins, team.match_losses)}
-                  </td>
-                  <td className="py-2 text-right text-ink">
-                    {record(team.game_wins, team.game_losses)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function GroupStandings({ groups }: { groups: HomeTeamGroup[] }) {
-  return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      {groups.map((group) => (
-        <div key={group.name}>
-          <StandingsTable title={group.name} standings={group.standings} />
-        </div>
-      ))}
-    </div>
-  );
-}
+import type { HomeBracketSeries } from "@/lib/types";
 
 function teamCode(team: string) {
   const codes: Record<string, string> = {
@@ -102,6 +13,7 @@ function teamCode(team: string) {
     "KT Rolster": "KT",
     "NS Redforce": "NS",
     T1: "T1",
+    TBD: "TBD",
   };
 
   return codes[team] ?? team;
@@ -171,8 +83,18 @@ type PositionedBracketMatch = {
 function bracketLayoutRows(rounds: BracketRound[]) {
   const countKey = rounds.map((round) => round.matches.length).join("-");
   const presets: Record<string, number[][]> = {
-    "2-2-1": [[0, 1], [0, 1], [0.5]],
-    "3-3-1-2-1": [[0.5, 1.5, 3], [0, 1, 2.5], [2], [0.5, 1.5], [1]],
+    "2-2-1": [
+      [0, 1],
+      [0, 1],
+      [0.5],
+    ],
+    "3-3-1-2-1": [
+      [0.5, 1.5, 3],
+      [0, 1, 2.5],
+      [2],
+      [0.5, 1.5],
+      [1],
+    ],
     "1-1-2-1": [[1.5], [1.25], [0, 1], [0.5]],
     "2-1": [[0, 2], [1]],
   };
@@ -251,7 +173,7 @@ function buildBracketConnectors(
   return connectors;
 }
 
-function Bracket({
+export default function TournamentBracket({
   title,
   matches,
   emptyText,
@@ -355,94 +277,6 @@ function Bracket({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-export default async function HomePage() {
-  const overview = await getHomeSeasonOverview();
-
-  return (
-    <div className="flex flex-col gap-14">
-      <section>
-        <p className="font-stat text-sm text-ink-muted">LCK 2026</p>
-        <h1 className="font-display text-5xl font-bold text-ink">
-          Season Overview
-        </h1>
-        <p className="mt-2 max-w-2xl text-ink-muted">
-          Domestic LCK format, group placement, carry-over standings, and
-          bracket results from the loaded Oracle&apos;s Elixir data.
-        </p>
-      </section>
-
-      <section className="flex flex-col gap-8">
-        <SectionHeader
-          eyebrow="Opening tournament"
-          title="LCK Cup"
-          description="Group Stage teams are shown in Group Baron and Group Dragon. Bracket results are pulled from the loaded Cup series after group play."
-        />
-
-        <GroupStandings groups={overview.cup.groups} />
-
-        <Bracket
-          title="Play-In"
-          matches={overview.cup.playIn}
-          emptyText="No LCK Cup play-in or playoff results are loaded yet."
-        />
-
-        <Bracket
-          title="Playoffs"
-          matches={overview.cup.playoffs}
-          emptyText="No LCK Cup playoff results are loaded yet."
-        />
-      </section>
-
-      <section className="flex flex-col gap-6">
-        <SectionHeader
-          eyebrow="Spring split"
-          title="Rounds 1-2"
-          description="Regular-season match and game standings before the Road to MSI bracket."
-        />
-        <StandingsTable
-          title="Rounds 1-2 Standings"
-          standings={overview.roundsOneTwo.standings}
-        />
-      </section>
-
-      <section className="flex flex-col gap-6">
-        <SectionHeader eyebrow="Mid-season qualifier" title="Road to MSI" />
-        <Bracket
-          title="Road to MSI Bracket"
-          matches={overview.roadToMsi.bracket}
-          emptyText="No Road to MSI results are loaded yet."
-        />
-      </section>
-
-      <section className="flex flex-col gap-8">
-        <SectionHeader
-          eyebrow="Summer split"
-          title="Rounds 3-4"
-          description="Legend Group and Rise Group standings include the carried-over Rounds 1-2 record plus loaded Rounds 3-4 matches."
-        />
-        <GroupStandings groups={overview.roundsThreeFour.groups} />
-      </section>
-
-      <section className="flex flex-col gap-6">
-        <SectionHeader
-          eyebrow="Season finish"
-          title="Season Play-In and Season Playoffs"
-        />
-        <Bracket
-          title="Season Play-In"
-          matches={overview.seasonFinals.playIn}
-          emptyText="No Season Play-In results are loaded yet."
-        />
-        <Bracket
-          title="Season Playoffs"
-          matches={overview.seasonFinals.playoffs}
-          emptyText="No Season Playoff results are loaded yet."
-        />
-      </section>
     </div>
   );
 }

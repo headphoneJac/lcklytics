@@ -1,19 +1,8 @@
 import PlayerChampionMatchup from "@/components/matchups/PlayerChampionMatchup";
-import SplitSelector from "@/components/SplitSelector";
-import { getPlayerChampionMatchups, getSplitOptions } from "@/lib/queries";
-import { getSplitLabel, resolveSplitKey, type SplitSearchParams } from "@/lib/splits";
+import { getPlayerChampionMatchups } from "@/lib/queries";
 
-export default async function MatchupsPage({
-  searchParams,
-}: {
-  searchParams?: SplitSearchParams;
-}) {
-  const splitKey = await resolveSplitKey(searchParams);
-  const [splits, matchups] = await Promise.all([
-    getSplitOptions(),
-    getPlayerChampionMatchups(splitKey),
-  ]);
-  const currentSplit = getSplitLabel(splits, splitKey);
+export default async function MatchupsPage() {
+  const matchups = await getPlayerChampionMatchups();
 
   return (
     <div className="flex flex-col gap-10">
@@ -28,16 +17,7 @@ export default async function MatchupsPage({
             then see which pick produced the stronger performance profile.
           </p>
         </div>
-        <p className="font-stat text-xs text-ink-muted">
-          Scope: {currentSplit}
-        </p>
       </section>
-
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/matchups"
-      />
 
       <PlayerChampionMatchup matchups={matchups} />
     </div>

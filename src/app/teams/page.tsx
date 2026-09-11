@@ -1,6 +1,18 @@
 import SplitSelector from "@/components/SplitSelector";
-import { getSplitOptions, getTeamSideProfiles } from "@/lib/queries";
-import { getSplitLabel, resolveSplitKey, type SplitSearchParams } from "@/lib/splits";
+import TournamentBracket from "@/components/TournamentBracket";
+import {
+  CUP_GROUPS,
+  DEFAULT_SPLIT_KEY,
+  ROUNDS_THREE_FOUR_GROUPS,
+  getTeamBracketSections,
+  getTeamPageSideProfiles,
+  getTeamSplitOptions,
+} from "@/lib/queries";
+import {
+  getSplitLabel,
+  resolveSplitKey,
+  type SplitSearchParams,
+} from "@/lib/splits";
 import type { TeamSideProfile } from "@/lib/types";
 
 function formatPct(value: number) {
@@ -60,7 +72,9 @@ function SideRead({ team }: { team: TeamSideProfile }) {
 
   const favoredSide = team.side_delta_pct > 0 ? "Blue" : "Red";
   return (
-    <span className={favoredSide === "Blue" ? "text-blue-side" : "text-red-side"}>
+    <span
+      className={favoredSide === "Blue" ? "text-blue-side" : "text-red-side"}
+    >
       {favoredSide} +{Math.abs(team.side_delta_pct).toFixed(1)} pp
     </span>
   );
@@ -93,23 +107,137 @@ function LeaderStat({
   );
 }
 
+function TeamCard({
+  team,
+  index,
+}: {
+  team: TeamSideProfile;
+  index: number;
+}) {
+  return (
+    <article
+      key={team.team}
+      className="rounded-lg border border-white/10 bg-surface/60 p-3"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-stat text-xs text-ink-muted">#{index + 1}</p>
+          <h2 className="mt-1 truncate font-display text-lg font-bold tracking-tight text-ink">
+            {team.team}
+          </h2>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-stat text-sm tabular-nums text-gold">
+            {team.match_wins}-{team.match_losses}
+          </p>
+          <p className="text-xs text-ink-muted">match record</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2 border-y border-white/5 py-3 text-xs">
+        <div>
+          <p className="font-stat tabular-nums text-ink">
+            {team.games_played}
+          </p>
+          <p className="text-xs text-ink-muted">games</p>
+        </div>
+        <div>
+          <p className="font-stat tabular-nums text-ink">
+            {team.game_wins}-{team.game_losses}
+          </p>
+          <p className="text-xs text-ink-muted">game record</p>
+        </div>
+        <div>
+          <p className="font-stat tabular-nums text-gold">
+            {formatPct(team.win_rate_pct)}
+          </p>
+          <p className="text-xs text-ink-muted">both sides</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3">
+        <SideMeter
+          label="Blue side"
+          wins={team.blue_wins}
+          games={team.blue_games_played}
+          rate={team.blue_win_rate_pct}
+          colorClass="bg-blue-side"
+        />
+        <SideMeter
+          label="Red side"
+          wins={team.red_wins}
+          games={team.red_games_played}
+          rate={team.red_win_rate_pct}
+          colorClass="bg-red-side"
+        />
+        <SideMeter
+          label="Both sides"
+          wins={team.game_wins}
+          games={team.games_played}
+          rate={team.win_rate_pct}
+          colorClass="bg-gold"
+        />
+      </div>
+
+      <p className="mt-4 text-sm">
+        <SideRead team={team} />
+      </p>
+    </article>
+  );
+}
+
+function getTeamCardGroups(splitKey: string, teams: TeamSideProfile[]) {
+  const groupDefinitions =
+    splitKey === "Cup"
+      ? CUP_GROUPS
+      : splitKey === "Rounds 3-4"
+        ? ROUNDS_THREE_FOUR_GROUPS
+        : null;
+
+  if (!groupDefinitions) {
+    return [{ name: null, teams }];
+  }
+
+  const teamsByName = new Map(teams.map((team) => [team.team, team]));
+
+  return groupDefinitions.map((group) => ({
+    name: group.name,
+    teams: group.teams
+      .map((groupTeam) => {
+        return teamsByName.get(groupTeam.label) ?? teamsByName.get(groupTeam.dbName);
+      })
+      .filter((team): team is TeamSideProfile => Boolean(team)),
+  }));
+}
+
 export default async function TeamsPage({
   searchParams,
 }: {
   searchParams?: SplitSearchParams;
 }) {
-  const splitKey = await resolveSplitKey(searchParams);
-  const [splits, teams] = await Promise.all([
-    getSplitOptions(),
-    getTeamSideProfiles(splitKey),
+  const requestedSplitKey = await resolveSplitKey(searchParams);
+  const splits = getTeamSplitOptions();
+  const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
+    ? requestedSplitKey
+    : DEFAULT_SPLIT_KEY;
+  const [teams, bracketSections] = await Promise.all([
+    getTeamPageSideProfiles(splitKey),
+    getTeamBracketSections(splitKey),
   ]);
   const currentSplit = getSplitLabel(splits, splitKey);
   const bestOverall = pickBest(teams, "win_rate_pct", "games_played");
   const bestBlue = pickBest(teams, "blue_win_rate_pct", "blue_games_played");
   const bestRed = pickBest(teams, "red_win_rate_pct", "red_games_played");
+  const teamCardGroups = getTeamCardGroups(splitKey, teams);
 
   return (
     <div className="flex flex-col gap-10">
+      <SplitSelector
+        splits={splits}
+        activeSplitKey={splitKey}
+        basePath="/teams"
+      />
+
       <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="font-stat text-sm text-ink-muted">Teams</p>
@@ -117,20 +245,14 @@ export default async function TeamsPage({
             LCK Team Dashboard
           </h1>
           <p className="mt-2 max-w-2xl text-ink-muted">
-            Regular-season standings with blue side, red side, and combined
-            side win rates for every team.
+            Regular-season standings with blue side, red side, and combined side
+            win rates for every team.
           </p>
         </div>
         <p className="font-stat text-xs text-ink-muted">
           Scope: {currentSplit}
         </p>
       </section>
-
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/teams"
-      />
 
       <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
         <LeaderStat
@@ -167,78 +289,41 @@ export default async function TeamsPage({
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-        {teams.map((team, index) => (
-          <article
-            key={team.team}
-            className="rounded-lg border border-white/10 bg-surface/60 p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-stat text-xs text-ink-muted">#{index + 1}</p>
-                <h2 className="mt-1 truncate font-display text-lg font-bold tracking-tight text-ink">
-                  {team.team}
+      <section className="flex flex-col gap-8">
+        {teamCardGroups.map((group) => (
+          <div key={group.name ?? "all"} className="flex flex-col gap-3">
+            {group.name ? (
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-2">
+                <h2 className="font-display text-xl font-bold tracking-tight text-ink">
+                  {group.name}
                 </h2>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="font-stat text-sm tabular-nums text-gold">
-                  {team.match_wins}-{team.match_losses}
+                <p className="font-stat text-xs text-ink-muted">
+                  {group.teams.length} teams
                 </p>
-                <p className="text-xs text-ink-muted">match record</p>
               </div>
-            </div>
+            ) : null}
 
-            <div className="mt-4 grid grid-cols-3 gap-2 border-y border-white/5 py-3 text-xs">
-              <div>
-                <p className="font-stat tabular-nums text-ink">
-                  {team.games_played}
-                </p>
-                <p className="text-xs text-ink-muted">games</p>
-              </div>
-              <div>
-                <p className="font-stat tabular-nums text-ink">
-                  {team.game_wins}-{team.game_losses}
-                </p>
-                <p className="text-xs text-ink-muted">game record</p>
-              </div>
-              <div>
-                <p className="font-stat tabular-nums text-gold">
-                  {formatPct(team.win_rate_pct)}
-                </p>
-                <p className="text-xs text-ink-muted">both sides</p>
-              </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              {group.teams.map((team, index) => (
+                <TeamCard key={team.team} team={team} index={index} />
+              ))}
             </div>
-
-            <div className="mt-4 flex flex-col gap-3">
-              <SideMeter
-                label="Blue side"
-                wins={team.blue_wins}
-                games={team.blue_games_played}
-                rate={team.blue_win_rate_pct}
-                colorClass="bg-blue-side"
-              />
-              <SideMeter
-                label="Red side"
-                wins={team.red_wins}
-                games={team.red_games_played}
-                rate={team.red_win_rate_pct}
-                colorClass="bg-red-side"
-              />
-              <SideMeter
-                label="Both sides"
-                wins={team.game_wins}
-                games={team.games_played}
-                rate={team.win_rate_pct}
-                colorClass="bg-gold"
-              />
-            </div>
-
-            <p className="mt-4 text-sm">
-              <SideRead team={team} />
-            </p>
-          </article>
+          </div>
         ))}
       </section>
+
+      {bracketSections.length > 0 ? (
+        <section className="flex flex-col gap-6">
+          {bracketSections.map((section) => (
+            <TournamentBracket
+              key={section.title}
+              title={section.title}
+              matches={section.matches}
+              emptyText={section.emptyText}
+            />
+          ))}
+        </section>
+      ) : null}
 
       <section>
         <h2 className="font-display text-lg font-semibold tracking-tight">

@@ -1,8 +1,16 @@
 import PlayerRadar from "@/components/players/PlayerRadar";
 import PlayersSummaryTable from "@/components/players/PlayersSummaryTable";
 import SplitSelector from "@/components/SplitSelector";
-import { getPlayerRoleProfiles, getSplitOptions } from "@/lib/queries";
-import { getSplitLabel, resolveSplitKey, type SplitSearchParams } from "@/lib/splits";
+import {
+  DEFAULT_SPLIT_KEY,
+  getPlayerRoleProfiles,
+  getTeamSplitOptions,
+} from "@/lib/queries";
+import {
+  getSplitLabel,
+  resolveSplitKey,
+  type SplitSearchParams,
+} from "@/lib/splits";
 import type { PlayerRole, PlayerRoleProfile } from "@/lib/types";
 
 const ROLE_ORDER: PlayerRole[] = ["top", "jng", "mid", "bot", "sup"];
@@ -63,12 +71,7 @@ function groupByRole(players: PlayerRoleProfile[]) {
 
 function pickLeader(
   players: PlayerRoleProfile[],
-  key:
-    | "kda"
-    | "first_blood_pct"
-    | "avg_dpm"
-    | "avg_cspm"
-    | "avg_vision_score",
+  key: "kda" | "first_blood_pct" | "avg_dpm" | "avg_cspm" | "avg_vision_score",
 ) {
   return [...players].sort((a, b) => {
     if (b[key] !== a[key]) return b[key] - a[key];
@@ -136,11 +139,12 @@ export default async function PlayersPage({
 }: {
   searchParams?: SplitSearchParams;
 }) {
-  const splitKey = await resolveSplitKey(searchParams);
-  const [splits, players] = await Promise.all([
-    getSplitOptions(),
-    getPlayerRoleProfiles(splitKey),
-  ]);
+  const requestedSplitKey = await resolveSplitKey(searchParams);
+  const splits = getTeamSplitOptions();
+  const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
+    ? requestedSplitKey
+    : DEFAULT_SPLIT_KEY;
+  const players = await getPlayerRoleProfiles(splitKey);
   const currentSplit = getSplitLabel(splits, splitKey);
   const leaderboardPlayers = players.filter(
     (player) => player.games_played >= MIN_LEADERBOARD_GAMES,
@@ -155,6 +159,12 @@ export default async function PlayersPage({
 
   return (
     <div className="flex flex-col gap-10">
+      <SplitSelector
+        splits={splits}
+        activeSplitKey={splitKey}
+        basePath="/players"
+      />
+
       <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="font-stat text-sm text-ink-muted">Players</p>
@@ -171,12 +181,6 @@ export default async function PlayersPage({
         </p>
       </section>
 
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/players"
-      />
-
       <section className="grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-5">
         <LeaderStat
           label="KDA leader"
@@ -185,7 +189,7 @@ export default async function PlayersPage({
           detail={
             kdaLeader
               ? `${kdaLeader.team} / ${ROLE_LABELS[kdaLeader.position]}`
-            : "No players found"
+              : "No players found"
           }
         />
         <LeaderStat
@@ -209,7 +213,7 @@ export default async function PlayersPage({
           detail={
             damageLeader
               ? `${damageLeader.team} / ${ROLE_LABELS[damageLeader.position]}`
-            : "No players found"
+              : "No players found"
           }
         />
         <LeaderStat
@@ -225,7 +229,9 @@ export default async function PlayersPage({
         <LeaderStat
           label="Vision leader"
           player={visionLeader}
-          value={visionLeader ? visionLeader.avg_vision_score.toFixed(1) : "0.0"}
+          value={
+            visionLeader ? visionLeader.avg_vision_score.toFixed(1) : "0.0"
+          }
           detail={
             visionLeader
               ? `${visionLeader.team} / ${ROLE_LABELS[visionLeader.position]}`
