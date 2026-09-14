@@ -145,6 +145,27 @@ const STAT_SECTIONS: {
 
 type Winner = "left" | "right" | "tie";
 
+type PlayerOption = {
+  key: string;
+  label: string;
+};
+
+type RadarMetricDefinition = {
+  metric: string;
+  key: keyof PlayerMatchupSummary;
+  suffix?: string;
+  lowerIsBetter?: boolean;
+};
+
+type PairRadarDatum = {
+  metric: string;
+  left: number;
+  right: number;
+  leftRaw: number;
+  rightRaw: number;
+  suffix?: string;
+};
+
 function playerKey(profile: PlayerChampionMatchupProfile) {
   return `${profile.player_id}:${profile.position}`;
 }
@@ -168,6 +189,67 @@ function valueClass(winner: Winner, side: "left" | "right") {
   return winner === side
     ? "rounded bg-indigo-300 px-2 py-0.5 text-bg"
     : "text-ink";
+}
+
+function formatRawRadarValue(value: number, suffix?: string) {
+  if (suffix === "%") return `${value.toFixed(1)}%`;
+  return value.toFixed(value % 1 === 0 ? 0 : 1);
+}
+
+function radarMetricsForRole(role: PlayerRole): RadarMetricDefinition[] {
+  if (role === "sup") {
+    return [
+      { metric: "KDA", key: "kda" },
+      { metric: "Vision", key: "avg_vision_score" },
+      { metric: "Team DMG", key: "avg_damage_share", suffix: "%" },
+      { metric: "FB %", key: "first_blood_pct", suffix: "%" },
+      { metric: "FT %", key: "first_tower_pct", suffix: "%" },
+      { metric: "GD@15", key: "avg_gd15" },
+      { metric: "XP Diff @ 15", key: "avg_xpd15" },
+      { metric: "CSD@15", key: "avg_csd15" },
+    ];
+  }
+
+  return [
+    { metric: "KDA", key: "kda" },
+    { metric: "DMG/min", key: "avg_dpm" },
+    { metric: "Team DMG", key: "avg_damage_share", suffix: "%" },
+    { metric: "CS/min", key: "avg_cspm" },
+    { metric: "FB %", key: "first_blood_pct", suffix: "%" },
+    { metric: "FT %", key: "first_tower_pct", suffix: "%" },
+    { metric: "GD@15", key: "avg_gd15" },
+    { metric: "CSD@15", key: "avg_csd15" },
+  ];
+}
+
+function normalizeSummaryMetric(
+  players: PlayerMatchupSummary[],
+  player: PlayerMatchupSummary,
+  key: keyof PlayerMatchupSummary,
+  lowerIsBetter = false,
+) {
+  const values = players
+    .map((candidate) => Number(candidate[key]))
+    .filter((value) => Number.isFinite(value));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const value = Number(player[key]);
+
+  if (
+    !Number.isFinite(value) ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max)
+  ) {
+    return 0;
+  }
+
+  if (max === min) return 50;
+
+  const normalized = lowerIsBetter
+    ? ((max - value) / (max - min)) * 100
+    : ((value - min) / (max - min)) * 100;
+
+  return Math.round(Math.min(Math.max(normalized, 0), 100));
 }
 
 function headToHeadRecord(
@@ -333,7 +415,7 @@ function PlayerHeader({
   side: "left" | "right";
   selected?: PlayerMatchupSummary;
   playerValue: string;
-  playerOptions: { key: string; label: string }[];
+  playerOptions: PlayerOption[];
   onPlayerChange: (value: string) => void;
 }) {
   return (
@@ -372,6 +454,11 @@ function PlayerHeader({
           onChange={(event) => onPlayerChange(event.target.value)}
           className="mt-2 w-full rounded border border-white/10 bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-gold"
         >
+          <option value="">
+            {playerOptions.length > 0
+              ? "Select a player"
+              : "No same-role players"}
+          </option>
           {playerOptions.map((player) => (
             <option key={player.key} value={player.key}>
               {player.label}
@@ -390,8 +477,25 @@ function ChampionPool({
   side: "left" | "right";
   selected?: PlayerMatchupSummary;
 }) {
-  const topPicks = selected?.champion_pool.slice(0, 6) ?? [];
-  const maxGames = Math.max(...topPicks.map((pick) => pick.games_played), 1);
+  const championRates =
+    selected?.champion_pool
+      .map((pick) => ({
+        ...pick,
+        pick_rate_pct:
+          selected.games_played > 0
+            ? (pick.games_played / selected.games_played) * 100
+            : 0,
+      }))
+      .sort((a, b) => {
+        if (b.pick_rate_pct !== a.pick_rate_pct) {
+          return b.pick_rate_pct - a.pick_rate_pct;
+        }
+        if (b.performance_score !== a.performance_score) {
+          return b.performance_score - a.performance_score;
+        }
+        return a.champion.localeCompare(b.champion);
+      })
+      .slice(0, 5) ?? [];
 
   return (
     <div>
@@ -399,28 +503,39 @@ function ChampionPool({
         <p className="font-stat text-xs text-ink-muted">
           {selected?.player ?? "Player"} champion pool
         </p>
-        <p className="font-stat text-xs text-ink-muted">Top picks</p>
+        <p className="font-stat text-xs text-ink-muted">Top 5 pick rates</p>
       </div>
-      <div
-        className={`flex h-32 items-end gap-2 ${
-          side === "right" ? "justify-end" : ""
-        }`}
-      >
-        {topPicks.map((pick) => (
-          <div key={pick.id} className="flex w-12 flex-col items-center gap-2">
-            <p className="font-stat text-xs text-ink">{pick.games_played}</p>
+      <div className="flex flex-col gap-2">
+        {championRates.map((pick) => (
+          <div key={pick.id}>
             <div
-              className={`w-full rounded-t border ${
-                side === "left"
-                  ? "border-blue-side/40 bg-blue-side/25"
-                  : "border-red-side/40 bg-red-side/25"
+              className={`mb-1 flex items-center justify-between gap-3 text-xs ${
+                side === "right" ? "flex-row-reverse text-right" : ""
               }`}
-              style={{
-                height: `${36 + (pick.games_played / maxGames) * 58}px`,
-              }}
-            />
-            <p className="w-full truncate text-center text-[10px] text-ink-muted">
-              {pick.champion}
+            >
+              <p className="truncate text-ink">{pick.champion}</p>
+              <p className="shrink-0 font-stat tabular-nums text-gold">
+                {pick.pick_rate_pct.toFixed(1)}%
+              </p>
+            </div>
+            <div
+              className={`h-2 overflow-hidden rounded-full bg-white/10 ${
+                side === "right" ? "rotate-180" : ""
+              }`}
+            >
+              <div
+                className={`h-full rounded-full ${
+                  side === "left" ? "bg-blue-side" : "bg-red-side"
+                }`}
+                style={{ width: `${pick.pick_rate_pct}%` }}
+              />
+            </div>
+            <p
+              className={`mt-1 font-stat text-[10px] tabular-nums text-ink-muted ${
+                side === "right" ? "text-right" : ""
+              }`}
+            >
+              {pick.games_played} games / {pick.win_rate_pct.toFixed(1)}% win
             </p>
           </div>
         ))}
@@ -432,28 +547,30 @@ function ChampionPool({
 function PairRadar({
   left,
   right,
+  rolePlayers,
 }: {
   left: PlayerMatchupSummary;
   right: PlayerMatchupSummary;
+  rolePlayers: PlayerMatchupSummary[];
 }) {
-  const data = [
-    ["Score", "performance_score"],
-    ["KDA", "kda"],
-    ["DPM", "avg_dpm"],
-    ["CSM", "avg_cspm"],
-    ["GD15", "avg_gd15"],
-    ["Vision", "avg_vision_score"],
-  ].map(([metric, key]) => {
-    const leftValue = Number(left[key as keyof PlayerMatchupSummary]);
-    const rightValue = Number(right[key as keyof PlayerMatchupSummary]);
-    const max = Math.max(leftValue, rightValue, 1);
-
-    return {
-      metric,
-      left: Math.max((leftValue / max) * 100, 0),
-      right: Math.max((rightValue / max) * 100, 0),
-    };
-  });
+  const data = radarMetricsForRole(left.position).map((definition) => ({
+    metric: definition.metric,
+    left: normalizeSummaryMetric(
+      rolePlayers,
+      left,
+      definition.key,
+      definition.lowerIsBetter,
+    ),
+    right: normalizeSummaryMetric(
+      rolePlayers,
+      right,
+      definition.key,
+      definition.lowerIsBetter,
+    ),
+    leftRaw: Number(left[definition.key]),
+    rightRaw: Number(right[definition.key]),
+    suffix: definition.suffix,
+  }));
 
   return (
     <div className="h-64">
@@ -466,6 +583,16 @@ function PairRadar({
           />
           <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
           <Tooltip
+            formatter={(value, name, item) => {
+              const payload = item.payload as PairRadarDatum;
+              const raw =
+                name === left.player ? payload.leftRaw : payload.rightRaw;
+
+              return [
+                `${value}/100 (${formatRawRadarValue(raw, payload.suffix)})`,
+                name,
+              ];
+            }}
             contentStyle={{
               background: "#151c24",
               border: "1px solid #ffffff1a",
@@ -520,6 +647,30 @@ function StatRow({
   );
 }
 
+function EmptyComparison({ selected }: { selected?: PlayerMatchupSummary }) {
+  return (
+    <div className="border-t border-white/10 px-4 py-10 text-center">
+      <p className="font-display text-2xl font-bold tracking-tight text-ink">
+        {selected
+          ? `Select another ${ROLE_LABELS[selected.position]} player`
+          : "Select players to compare"}
+      </p>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-ink-muted">
+        {selected
+          ? "The comparison list is limited to players in the same role."
+          : "Start with either side. Once a player is selected, the other list will narrow to matching-role players."}
+      </p>
+    </div>
+  );
+}
+
+function toPlayerOptions(players: PlayerMatchupSummary[]): PlayerOption[] {
+  return players.map((player) => ({
+    key: player.id,
+    label: `${player.player}`,
+  }));
+}
+
 export default function PlayerChampionMatchup({
   matchups,
 }: {
@@ -540,32 +691,70 @@ export default function PlayerChampionMatchup({
       .sort((a, b) => a.player.localeCompare(b.player));
   }, [matchups]);
 
-  const playerOptions = useMemo(
-    () =>
-      playerSummaries.map((player) => ({
-        key: player.id,
-        label: player.player,
-      })),
-    [playerSummaries],
+  const [leftPlayer, setLeftPlayer] = useState("");
+  const [rightPlayer, setRightPlayer] = useState("");
+
+  const selectedLeft = playerSummaries.find(
+    (profile) => profile.id === leftPlayer,
+  );
+  const selectedRight = playerSummaries.find(
+    (profile) => profile.id === rightPlayer,
   );
 
-  const initialLeftPlayer = playerOptions[0]?.key ?? "";
-  const initialRightPlayer =
-    playerOptions.find((player) => player.key !== initialLeftPlayer)?.key ??
-    initialLeftPlayer;
+  const leftPlayerOptions = useMemo(
+    () =>
+      toPlayerOptions(
+        playerSummaries.filter(
+          (player) =>
+            player.id !== rightPlayer &&
+            (!selectedRight || player.position === selectedRight.position),
+        ),
+      ),
+    [playerSummaries, rightPlayer, selectedRight],
+  );
+  const rightPlayerOptions = useMemo(
+    () =>
+      toPlayerOptions(
+        playerSummaries.filter(
+          (player) =>
+            player.id !== leftPlayer &&
+            (!selectedLeft || player.position === selectedLeft.position),
+        ),
+      ),
+    [playerSummaries, leftPlayer, selectedLeft],
+  );
 
-  const [leftPlayer, setLeftPlayer] = useState(initialLeftPlayer);
-  const [rightPlayer, setRightPlayer] = useState(initialRightPlayer);
+  const handleLeftPlayerChange = (value: string) => {
+    setLeftPlayer(value);
 
-  const selectedLeft =
-    playerSummaries.find((profile) => profile.id === leftPlayer) ??
-    playerSummaries[0];
-  const selectedRight =
-    playerSummaries.find((profile) => profile.id === rightPlayer) ??
-    playerSummaries[1] ??
-    playerSummaries[0];
+    const nextLeft = playerSummaries.find((player) => player.id === value);
+    if (
+      value &&
+      selectedRight &&
+      (!nextLeft ||
+        nextLeft.id === selectedRight.id ||
+        nextLeft.position !== selectedRight.position)
+    ) {
+      setRightPlayer("");
+    }
+  };
 
-  if (!selectedLeft || !selectedRight) {
+  const handleRightPlayerChange = (value: string) => {
+    setRightPlayer(value);
+
+    const nextRight = playerSummaries.find((player) => player.id === value);
+    if (
+      value &&
+      selectedLeft &&
+      (!nextRight ||
+        nextRight.id === selectedLeft.id ||
+        nextRight.position !== selectedLeft.position)
+    ) {
+      setLeftPlayer("");
+    }
+  };
+
+  if (playerSummaries.length === 0) {
     return (
       <section className="rounded-lg border border-white/10 bg-surface/60 p-5">
         <p className="text-sm text-ink-muted">
@@ -575,7 +764,20 @@ export default function PlayerChampionMatchup({
     );
   }
 
-  const headToHead = headToHeadRecord(selectedLeft, selectedRight);
+  const hasComparison =
+    selectedLeft &&
+    selectedRight &&
+    selectedLeft.id !== selectedRight.id &&
+    selectedLeft.position === selectedRight.position;
+  const rolePlayers = selectedLeft
+    ? playerSummaries.filter(
+        (player) => player.position === selectedLeft.position,
+      )
+    : [];
+  const headToHead =
+    hasComparison && selectedLeft && selectedRight
+      ? headToHeadRecord(selectedLeft, selectedRight)
+      : null;
 
   return (
     <section className="overflow-hidden rounded-lg border border-white/10 bg-[#11161d]">
@@ -590,78 +792,88 @@ export default function PlayerChampionMatchup({
           side="left"
           selected={selectedLeft}
           playerValue={leftPlayer}
-          playerOptions={playerOptions}
-          onPlayerChange={setLeftPlayer}
+          playerOptions={leftPlayerOptions}
+          onPlayerChange={handleLeftPlayerChange}
         />
         <PlayerHeader
           side="right"
           selected={selectedRight}
           playerValue={rightPlayer}
-          playerOptions={playerOptions}
-          onPlayerChange={setRightPlayer}
+          playerOptions={rightPlayerOptions}
+          onPlayerChange={handleRightPlayerChange}
         />
       </div>
 
-      <div className="grid grid-cols-2 border-b border-white/10 px-4 py-3 text-center text-sm">
-        <div className="rounded border border-indigo-300/40 bg-indigo-300/10 py-2 font-semibold text-ink">
-          Head to Head
-        </div>
-        <div className="py-2 text-ink-muted">Overall</div>
-      </div>
-
-      <HeadToHeadWins
-        left={selectedLeft}
-        right={selectedRight}
-        record={headToHead}
-      />
-
-      <div className="border-t border-white/10 px-4 py-5">
-        <p className="mb-4 rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
-          Champions Played
-        </p>
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px_1fr]">
-          <ChampionPool side="left" selected={selectedLeft} />
-          <div>
-            <p className="mb-2 rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
-              General
-            </p>
-            <PairRadar left={selectedLeft} right={selectedRight} />
-            <div className="mt-2 flex items-center justify-center gap-5 text-sm">
-              <span className="flex items-center gap-2 font-semibold text-ink">
-                <span className="size-2 rounded-sm bg-[#19a7ff]" />
-                {selectedLeft.player}
-              </span>
-              <span className="flex items-center gap-2 font-semibold text-ink">
-                <span className="size-2 rounded-sm bg-[#ff4655]" />
-                {selectedRight.player}
-              </span>
+      {hasComparison && selectedLeft && selectedRight && headToHead ? (
+        <>
+          <div className="grid grid-cols-2 border-b border-white/10 px-4 py-3 text-center text-sm">
+            <div className="rounded border border-indigo-300/40 bg-indigo-300/10 py-2 font-semibold text-ink">
+              Head to Head
             </div>
+            <div className="py-2 text-ink-muted">Overall</div>
           </div>
-          <ChampionPool side="right" selected={selectedRight} />
-        </div>
-      </div>
 
-      <div className="px-4 pb-5">
-        {STAT_SECTIONS.map((section) => (
-          <div key={section.title} className="mt-5">
-            <p className="rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
-              {section.title}
+          <HeadToHeadWins
+            left={selectedLeft}
+            right={selectedRight}
+            record={headToHead}
+          />
+
+          <div className="border-t border-white/10 px-4 py-5">
+            <p className="mb-4 rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
+              Champions Played
             </p>
-            <div className="mt-2">
-              {section.metrics.map((metric) => (
-                <StatRow
-                  key={metric.label}
-                  label={metric.label}
-                  left={Number(selectedLeft[metric.key])}
-                  right={Number(selectedRight[metric.key])}
-                  format={metric.format}
-                  lowerIsBetter={metric.lowerIsBetter}
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px_1fr]">
+              <ChampionPool side="left" selected={selectedLeft} />
+              <div>
+                <p className="mb-2 rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
+                  Role Radar
+                </p>
+                <PairRadar
+                  left={selectedLeft}
+                  right={selectedRight}
+                  rolePlayers={rolePlayers}
                 />
-              ))}
+                <div className="mt-2 flex items-center justify-center gap-5 text-sm">
+                  <span className="flex items-center gap-2 font-semibold text-ink">
+                    <span className="size-2 rounded-sm bg-[#19a7ff]" />
+                    {selectedLeft.player}
+                  </span>
+                  <span className="flex items-center gap-2 font-semibold text-ink">
+                    <span className="size-2 rounded-sm bg-[#ff4655]" />
+                    {selectedRight.player}
+                  </span>
+                </div>
+              </div>
+              <ChampionPool side="right" selected={selectedRight} />
             </div>
           </div>
-        ))}
-      </div>
+
+          <div className="px-4 pb-5">
+            {STAT_SECTIONS.map((section) => (
+              <div key={section.title} className="mt-5">
+                <p className="rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
+                  {section.title}
+                </p>
+                <div className="mt-2">
+                  {section.metrics.map((metric) => (
+                    <StatRow
+                      key={metric.label}
+                      label={metric.label}
+                      left={Number(selectedLeft[metric.key])}
+                      right={Number(selectedRight[metric.key])}
+                      format={metric.format}
+                      lowerIsBetter={metric.lowerIsBetter}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <EmptyComparison selected={selectedLeft ?? selectedRight} />
+      )}
     </section>
   );
 }

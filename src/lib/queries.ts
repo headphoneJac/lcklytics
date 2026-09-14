@@ -25,6 +25,12 @@ export const DEFAULT_SPLIT_KEY = '__all__'
 
 const PAGE_SIZE = 1000
 
+const PLAYER_PROFILE_COLUMNS =
+  'player_id, player, team, position, games_played, wins, win_rate_pct, total_kills, total_deaths, total_assists, avg_kills, avg_deaths, avg_assists, kda, avg_kill_participation_pct, avg_dpm, avg_gold_per_min, avg_damage_share, avg_vision_score, avg_wards_placed, avg_wards_killed, avg_control_wards_bought, avg_cspm, avg_gd15, avg_xpd15, avg_csd15, first_blood_pct, first_tower_pct'
+
+const LEGACY_PLAYER_PROFILE_COLUMNS =
+  'player_id, player, team, position, games_played, wins, win_rate_pct, total_kills, total_deaths, total_assists, avg_kills, avg_deaths, avg_assists, kda, avg_dpm, avg_damage_share, avg_vision_score, avg_wards_placed, avg_wards_killed, avg_control_wards_bought, avg_cspm, avg_gd15, avg_xpd15, avg_csd15, first_blood_pct, first_tower_pct'
+
 type NumericValue = number | string | null
 
 type RawSplitOption = Omit<
@@ -75,7 +81,9 @@ type RawPlayerRoleProfile = Omit<
   | 'avg_deaths'
   | 'avg_assists'
   | 'kda'
+  | 'avg_kill_participation_pct'
   | 'avg_dpm'
+  | 'avg_gold_per_min'
   | 'avg_damage_share'
   | 'avg_vision_score'
   | 'avg_wards_placed'
@@ -99,7 +107,9 @@ type RawPlayerRoleProfile = Omit<
   avg_deaths: NumericValue
   avg_assists: NumericValue
   kda: NumericValue
+  avg_kill_participation_pct: NumericValue
   avg_dpm: NumericValue
+  avg_gold_per_min: NumericValue
   avg_damage_share: NumericValue
   avg_vision_score: NumericValue
   avg_wards_placed: NumericValue
@@ -160,6 +170,7 @@ type RawScopedPlayerGameStat = {
   kills: NumericValue
   deaths: NumericValue
   assists: NumericValue
+  earned_gold: NumericValue
   dpm: NumericValue
   damage_share: NumericValue
   vision_score: NumericValue
@@ -183,8 +194,14 @@ type RawScopedPlayerTimeline = {
 type RawScopedTeamObjective = {
   game_id: string
   team_id: string
+  team_kills: NumericValue
   first_blood: boolean | null
   first_tower: boolean | null
+}
+
+type RawGameDuration = {
+  game_id: string
+  game_length_seconds: NumericValue
 }
 
 type RawScopedDraftAction = {
@@ -278,6 +295,19 @@ function normalizeNamedRelation(relation: SupabaseNamedRelation) {
 function toNumber(value: NumericValue) {
   const parsed = Number(value ?? 0)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function isMissingPlayerProfileMetricError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+
+  const record = error as { code?: unknown; message?: unknown }
+  const message = String(record.message ?? '')
+
+  return (
+    record.code === '42703' &&
+    (message.includes('avg_kill_participation_pct') ||
+      message.includes('avg_gold_per_min'))
+  )
 }
 
 function round(value: number, decimals = 1) {
@@ -498,40 +528,33 @@ function attachRoleRadars(players: PlayerRoleProfile[]) {
 
     if (player.position === 'sup') {
       player.radar = [
+        buildRadarMetric(rolePlayers, player, 'KDA', 'kda'),
+        buildRadarMetric(rolePlayers, player, 'KP', 'avg_kill_participation_pct', {
+          suffix: '%',
+        }),
         buildRadarMetric(rolePlayers, player, 'Vision', 'avg_vision_score'),
         buildRadarMetric(rolePlayers, player, 'Wards Placed', 'avg_wards_placed'),
         buildRadarMetric(rolePlayers, player, 'Wards Cleared', 'avg_wards_killed'),
         buildRadarMetric(rolePlayers, player, 'Control Wards', 'avg_control_wards_bought'),
-        buildRadarMetric(rolePlayers, player, 'Assists', 'avg_assists'),
-        buildRadarMetric(rolePlayers, player, 'Survival', 'avg_deaths', {
-          lowerIsBetter: true,
-        }),
-      ]
-      continue
-    }
-
-    if (player.position === 'jng') {
-      player.radar = [
-        buildRadarMetric(rolePlayers, player, 'KDA', 'kda'),
-        buildRadarMetric(rolePlayers, player, 'Assists', 'avg_assists'),
-        buildRadarMetric(rolePlayers, player, 'Vision', 'avg_vision_score'),
-        buildRadarMetric(rolePlayers, player, 'DPM', 'avg_dpm'),
         buildRadarMetric(rolePlayers, player, 'GD@15', 'avg_gd15'),
-        buildRadarMetric(rolePlayers, player, 'Win Rate', 'win_rate_pct', {
-          suffix: '%',
-        }),
+        buildRadarMetric(rolePlayers, player, 'XP Diff @ 15', 'avg_xpd15'),
       ]
       continue
     }
 
     player.radar = [
-      buildRadarMetric(rolePlayers, player, 'GD@15', 'avg_gd15'),
-      buildRadarMetric(rolePlayers, player, 'CS/min', 'avg_cspm'),
-      buildRadarMetric(rolePlayers, player, 'DPM', 'avg_dpm'),
-      buildRadarMetric(rolePlayers, player, 'Damage Share', 'avg_damage_share', {
+      buildRadarMetric(rolePlayers, player, 'KDA', 'kda'),
+      buildRadarMetric(rolePlayers, player, 'KP', 'avg_kill_participation_pct', {
         suffix: '%',
       }),
-      buildRadarMetric(rolePlayers, player, 'KDA', 'kda'),
+      buildRadarMetric(rolePlayers, player, 'DMG/min', 'avg_dpm'),
+      buildRadarMetric(rolePlayers, player, 'CS/min', 'avg_cspm'),
+      buildRadarMetric(rolePlayers, player, 'Gold/min', 'avg_gold_per_min'),
+      buildRadarMetric(rolePlayers, player, 'FB %', 'first_blood_pct', {
+        suffix: '%',
+      }),
+      buildRadarMetric(rolePlayers, player, 'GD@15', 'avg_gd15'),
+      buildRadarMetric(rolePlayers, player, 'CSD@15', 'avg_csd15'),
     ]
   }
 
@@ -592,7 +615,7 @@ async function getTimeline15ByPlayerGame(gameIds: string[]) {
 async function getObjectivesByTeamGame(gameIds: string[]) {
   const objectiveRows = await fetchRowsByGameIds<RawScopedTeamObjective>(
     'game_team_stats',
-    'game_id, team_id, first_blood, first_tower',
+    'game_id, team_id, team_kills, first_blood, first_tower',
     gameIds,
   )
 
@@ -601,18 +624,36 @@ async function getObjectivesByTeamGame(gameIds: string[]) {
   )
 }
 
+async function getGameDurations(gameIds: string[]) {
+  const gameRows = await fetchRowsByGameIds<RawGameDuration>(
+    'games',
+    'game_id, game_length_seconds',
+    gameIds,
+  )
+
+  return new Map(
+    gameRows.map((row) => [row.game_id, toNumber(row.game_length_seconds)]),
+  )
+}
+
 async function getPlayerRoleProfilesForGameIds(
   gameIds: string[],
 ): Promise<PlayerRoleProfile[]> {
-  const [playerRows, timelineByPlayerGame, objectivesByTeamGame] =
+  const [
+    playerRows,
+    timelineByPlayerGame,
+    objectivesByTeamGame,
+    gameDurations,
+  ] =
     await Promise.all([
       fetchRowsByGameIds<RawScopedPlayerGameStat>(
         'game_player_stats',
-        'game_id, player_id, team_id, position, champion, result, kills, deaths, assists, dpm, damage_share, vision_score, wards_placed, wards_killed, control_wards_bought, cspm, players ( name ), teams ( name )',
+        'game_id, player_id, team_id, position, champion, result, kills, deaths, assists, earned_gold, dpm, damage_share, vision_score, wards_placed, wards_killed, control_wards_bought, cspm, players ( name ), teams ( name )',
         gameIds,
       ),
       getTimeline15ByPlayerGame(gameIds),
       getObjectivesByTeamGame(gameIds),
+      getGameDurations(gameIds),
     ])
 
   type PlayerAccumulator = {
@@ -625,6 +666,9 @@ async function getPlayerRoleProfilesForGameIds(
     total_kills: number
     total_deaths: number
     total_assists: number
+    total_team_kills: number
+    total_earned_gold: number
+    total_game_seconds: number
     total_dpm: number
     total_damage_share: number
     total_vision_score: number
@@ -660,6 +704,9 @@ async function getPlayerRoleProfilesForGameIds(
         total_kills: 0,
         total_deaths: 0,
         total_assists: 0,
+        total_team_kills: 0,
+        total_earned_gold: 0,
+        total_game_seconds: 0,
         total_dpm: 0,
         total_damage_share: 0,
         total_vision_score: 0,
@@ -682,6 +729,7 @@ async function getPlayerRoleProfilesForGameIds(
     accumulator.total_kills += toNumber(row.kills)
     accumulator.total_deaths += toNumber(row.deaths)
     accumulator.total_assists += toNumber(row.assists)
+    accumulator.total_earned_gold += toNumber(row.earned_gold)
     accumulator.total_dpm += toNumber(row.dpm)
     accumulator.total_damage_share += toNumber(row.damage_share)
     accumulator.total_vision_score += toNumber(row.vision_score)
@@ -691,8 +739,11 @@ async function getPlayerRoleProfilesForGameIds(
     accumulator.total_cspm += toNumber(row.cspm)
 
     const objective = objectivesByTeamGame.get(`${row.game_id}:${row.team_id}`)
+    accumulator.total_team_kills += toNumber(objective?.team_kills ?? 0)
     accumulator.first_bloods += objective?.first_blood ? 1 : 0
     accumulator.first_towers += objective?.first_tower ? 1 : 0
+
+    accumulator.total_game_seconds += gameDurations.get(row.game_id) ?? 0
 
     const timeline = timelineByPlayerGame.get(`${row.game_id}:${row.player_id}`)
     if (timeline) {
@@ -729,7 +780,15 @@ async function getPlayerRoleProfilesForGameIds(
               2,
             )
           : 0,
+      avg_kill_participation_pct: pct(
+        player.total_kills + player.total_assists,
+        player.total_team_kills,
+      ),
       avg_dpm: games > 0 ? Math.round(player.total_dpm / games) : 0,
+      avg_gold_per_min:
+        player.total_game_seconds > 0
+          ? round(player.total_earned_gold / (player.total_game_seconds / 60))
+          : 0,
       avg_damage_share:
         games > 0 ? round((player.total_damage_share / games) * 100) : 0,
       avg_vision_score:
@@ -769,11 +828,23 @@ export async function getPlayerRoleProfiles(
     return getPlayerRoleProfilesForGameIds(gameIds)
   }
 
-  const rows = await fetchScopedRows<RawPlayerRoleProfile>(
-    'dashboard_player_stats_by_split',
-    'player_id, player, team, position, games_played, wins, win_rate_pct, total_kills, total_deaths, total_assists, avg_kills, avg_deaths, avg_assists, kda, avg_dpm, avg_damage_share, avg_vision_score, avg_wards_placed, avg_wards_killed, avg_control_wards_bought, avg_cspm, avg_gd15, avg_xpd15, avg_csd15, first_blood_pct, first_tower_pct',
-    splitKey,
-  )
+  let rows: RawPlayerRoleProfile[]
+
+  try {
+    rows = await fetchScopedRows<RawPlayerRoleProfile>(
+      'dashboard_player_stats_by_split',
+      PLAYER_PROFILE_COLUMNS,
+      splitKey,
+    )
+  } catch (error) {
+    if (!isMissingPlayerProfileMetricError(error)) throw error
+
+    rows = await fetchScopedRows<RawPlayerRoleProfile>(
+      'dashboard_player_stats_by_split',
+      LEGACY_PLAYER_PROFILE_COLUMNS,
+      splitKey,
+    )
+  }
 
   const players = rows
     .filter((row) => isPlayerRole(row.position))
@@ -792,7 +863,9 @@ export async function getPlayerRoleProfiles(
       avg_deaths: toNumber(row.avg_deaths),
       avg_assists: toNumber(row.avg_assists),
       kda: toNumber(row.kda),
+      avg_kill_participation_pct: toNumber(row.avg_kill_participation_pct),
       avg_dpm: Math.round(toNumber(row.avg_dpm)),
+      avg_gold_per_min: toNumber(row.avg_gold_per_min),
       avg_damage_share: toNumber(row.avg_damage_share),
       avg_vision_score: toNumber(row.avg_vision_score),
       avg_wards_placed: toNumber(row.avg_wards_placed),

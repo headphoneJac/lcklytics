@@ -210,7 +210,9 @@ select
   round(avg(gps.deaths), 1) as avg_deaths,
   round(avg(gps.assists), 1) as avg_assists,
   round((coalesce(sum(gps.kills), 0) + coalesce(sum(gps.assists), 0)) / nullif(coalesce(sum(gps.deaths), 0), 0)::numeric, 2) as kda,
+  round(100.0 * (coalesce(sum(gps.kills), 0) + coalesce(sum(gps.assists), 0)) / nullif(coalesce(sum(gts.team_kills), 0), 0), 1) as avg_kill_participation_pct,
   round(avg(gps.dpm)) as avg_dpm,
+  round(sum(gps.earned_gold) / nullif(sum(g.game_length_seconds) / 60.0, 0), 1) as avg_gold_per_min,
   round(100.0 * avg(gps.damage_share), 1) as avg_damage_share,
   round(avg(gps.vision_score), 1) as avg_vision_score,
   round(avg(gps.wards_placed), 1) as avg_wards_placed,
@@ -223,6 +225,7 @@ select
   round(100.0 * count(*) filter (where gts.first_blood) / nullif(count(*), 0), 1) as first_blood_pct,
   round(100.0 * count(*) filter (where gts.first_tower) / nullif(count(*), 0), 1) as first_tower_pct
 from dashboard_game_scopes gs
+join games g on g.game_id = gs.game_id
 join game_player_stats gps on gps.game_id = gs.game_id
 join players p on p.player_id = gps.player_id
 join teams t on t.team_id = gps.team_id

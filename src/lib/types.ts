@@ -61,7 +61,9 @@ export interface PlayerRoleProfile {
   avg_deaths: number
   avg_assists: number
   kda: number
+  avg_kill_participation_pct: number
   avg_dpm: number
+  avg_gold_per_min: number
   avg_damage_share: number
   avg_vision_score: number
   avg_wards_placed: number

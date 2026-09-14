@@ -124,12 +124,9 @@ export default async function ChampionsPage({
             in draft or on the Rift.
           </p>
         </div>
-        <p className="font-stat text-xs text-ink-muted">
-          Scope: {currentSplit}
-        </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
         <div className="border-l border-white/10 pl-4">
           <p className="text-xs uppercase text-ink-muted">Champions picked</p>
           <p className="mt-2 font-stat text-2xl tabular-nums text-gold">
@@ -155,15 +152,6 @@ export default async function ChampionsPage({
           </p>
           <p className="mt-1 text-xs text-ink-muted">
             Picked or banned champions.
-          </p>
-        </div>
-        <div className="border-l border-white/10 pl-4">
-          <p className="text-xs uppercase text-ink-muted">No eligibility cut</p>
-          <p className="mt-2 font-display text-2xl font-bold tracking-tight text-ink">
-            All samples
-          </p>
-          <p className="mt-1 text-xs text-ink-muted">
-            Leaderboards include every champion.
           </p>
         </div>
       </section>
