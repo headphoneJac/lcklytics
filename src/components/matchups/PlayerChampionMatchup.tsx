@@ -11,6 +11,10 @@ import {
   Tooltip,
 } from "recharts";
 import type { PlayerChampionMatchupProfile, PlayerRole } from "@/lib/types";
+import ChampionIcon from "@/components/images/ChampionIcon";
+import PlayerAvatar from "@/components/images/PlayerAvatar";
+import TeamLogo from "@/components/images/TeamLogo";
+import type { EsportsAssets } from "@/lib/assets";
 
 const ROLE_LABELS: Record<PlayerRole, string> = {
   top: "Top",
@@ -339,15 +343,6 @@ function HeadToHeadWins({
   );
 }
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 function summarizePlayer(
   key: string,
   picks: PlayerChampionMatchupProfile[],
@@ -410,12 +405,14 @@ function PlayerHeader({
   selected,
   playerValue,
   playerOptions,
+  assets,
   onPlayerChange,
 }: {
   side: "left" | "right";
   selected?: PlayerMatchupSummary;
   playerValue: string;
   playerOptions: PlayerOption[];
+  assets?: EsportsAssets;
   onPlayerChange: (value: string) => void;
 }) {
   return (
@@ -426,14 +423,24 @@ function PlayerHeader({
         }`}
       />
       <div className="relative flex items-center gap-4">
-        <div className="grid size-16 shrink-0 place-items-center rounded bg-white/10 font-display text-xl font-bold text-ink">
-          {selected ? initials(selected.player) : "?"}
-        </div>
+        <PlayerAvatar
+          player={selected?.player ?? "?"}
+          team={selected?.team}
+          assets={assets}
+          className="size-16 rounded"
+        />
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-display text-2xl font-bold tracking-tight text-ink">
             {selected?.player ?? "Select player"}
           </h2>
-          <p className="text-xs text-ink-muted">
+          <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+            {selected ? (
+              <TeamLogo
+                team={selected.team}
+                assets={assets}
+                className="size-5 rounded-sm"
+              />
+            ) : null}
             {selected
               ? `${selected.team} / ${ROLE_LABELS[selected.position]}`
               : "Choose a player"}
@@ -513,7 +520,17 @@ function ChampionPool({
                 side === "right" ? "flex-row-reverse text-right" : ""
               }`}
             >
-              <p className="truncate text-ink">{pick.champion}</p>
+              <p
+                className={`flex min-w-0 items-center gap-2 text-ink ${
+                  side === "right" ? "flex-row-reverse" : ""
+                }`}
+              >
+                <ChampionIcon
+                  champion={pick.champion}
+                  className="size-6 rounded"
+                />
+                <span className="truncate">{pick.champion}</span>
+              </p>
               <p className="shrink-0 font-stat tabular-nums text-gold">
                 {pick.pick_rate_pct.toFixed(1)}%
               </p>
@@ -673,8 +690,10 @@ function toPlayerOptions(players: PlayerMatchupSummary[]): PlayerOption[] {
 
 export default function PlayerChampionMatchup({
   matchups,
+  assets,
 }: {
   matchups: PlayerChampionMatchupProfile[];
+  assets?: EsportsAssets;
 }) {
   const playerSummaries = useMemo(() => {
     const grouped = new Map<string, PlayerChampionMatchupProfile[]>();
@@ -793,6 +812,7 @@ export default function PlayerChampionMatchup({
           selected={selectedLeft}
           playerValue={leftPlayer}
           playerOptions={leftPlayerOptions}
+          assets={assets}
           onPlayerChange={handleLeftPlayerChange}
         />
         <PlayerHeader
@@ -800,6 +820,7 @@ export default function PlayerChampionMatchup({
           selected={selectedRight}
           playerValue={rightPlayer}
           playerOptions={rightPlayerOptions}
+          assets={assets}
           onPlayerChange={handleRightPlayerChange}
         />
       </div>

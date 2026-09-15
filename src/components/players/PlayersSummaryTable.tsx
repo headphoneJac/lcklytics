@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import type { PlayerRole, PlayerRoleProfile } from "@/lib/types";
+import PlayerAvatar from "@/components/images/PlayerAvatar";
+import TeamLogo from "@/components/images/TeamLogo";
+import type { EsportsAssets } from "@/lib/assets";
 
 const ROLE_ORDER: PlayerRole[] = ["top", "jng", "mid", "bot", "sup"];
 
@@ -48,8 +51,10 @@ function sortByTeamRole(a: PlayerRoleProfile, b: PlayerRoleProfile) {
 
 export default function PlayersSummaryTable({
   players,
+  assets,
 }: {
   players: PlayerRoleProfile[];
+  assets?: EsportsAssets;
 }) {
   const [activeRole, setActiveRole] = useState<RoleFilter>("all");
 
@@ -126,8 +131,27 @@ export default function PlayersSummaryTable({
                 key={`${player.player_id}:${player.position}`}
                 className="border-b border-white/5"
               >
-                <td className="py-2 font-body">{player.player}</td>
-                <td className="py-2 font-body text-ink">{player.team}</td>
+                <td className="py-2 font-body">
+                  <span className="flex items-center gap-2">
+                    <PlayerAvatar
+                      player={player.player}
+                      team={player.team}
+                      assets={assets}
+                      className="size-8 rounded-full"
+                    />
+                    <span>{player.player}</span>
+                  </span>
+                </td>
+                <td className="py-2 font-body text-ink">
+                  <span className="flex items-center gap-2">
+                    <TeamLogo
+                      team={player.team}
+                      assets={assets}
+                      className="size-7 rounded"
+                    />
+                    <span>{player.team}</span>
+                  </span>
+                </td>
                 <td className="py-2 font-body text-ink-muted">
                   {ROLE_LABELS[player.position]}
                 </td>

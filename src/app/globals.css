@@ -6,6 +6,8 @@
   --color-blue-side: #2e7de1;
   --color-red-side: #e2483b;
   --color-gold: #c9a227;
+  --color-silver: #aeb7c2;
+  --color-green: #2fbf71;
   --color-ink: #e6e9ef;
   --color-ink-muted: #8a93a3;
 
@@ -39,4 +41,52 @@ body::before {
     radial-gradient(ellipse 700px 500px at 50% 110%,
       color-mix(in srgb, var(--color-gold) 10%, transparent), transparent 70%);
   pointer-events: none;
+}
+
+.asset-bg-name-cell {
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+}
+
+.asset-bg-name-cell::before {
+  background-image: var(--asset-row-image);
+  background-position: left 1.5rem center;
+  background-repeat: no-repeat;
+  background-size: auto 220%;
+  content: '';
+  inset: 0;
+  opacity: 0.375;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.asset-bg-name-cell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.asset-bg-leader-card {
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+}
+
+.asset-bg-leader-card::before {
+  background-image: var(--asset-row-image);
+  background-position: left 5rem center;
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  content: '';
+  inset: 0;
+  opacity: 0.75;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.asset-bg-leader-card > * {
+  position: relative;
+  z-index: 1;
 }

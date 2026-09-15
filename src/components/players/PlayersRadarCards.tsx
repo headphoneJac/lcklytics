@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import type { PlayerRole, PlayerRoleProfile } from "@/lib/types";
 import PlayerRadar from "@/components/players/PlayerRadar";
+import PlayerAvatar from "@/components/images/PlayerAvatar";
+import type { EsportsAssets } from "@/lib/assets";
 
 const ROLE_ORDER: PlayerRole[] = ["top", "jng", "mid", "bot", "sup"];
 
@@ -61,22 +63,36 @@ function groupByRole(players: PlayerRoleProfile[], activeRole: RoleFilter) {
     .filter(({ players: rolePlayers }) => rolePlayers.length > 0);
 }
 
-function RadarCard({ player }: { player: PlayerRoleProfile }) {
+function RadarCard({
+  player,
+  assets,
+}: {
+  player: PlayerRoleProfile;
+  assets?: EsportsAssets;
+}) {
   const score = radarScore(player);
 
   return (
     <article className="rounded-lg border border-white/10 bg-surface/60 p-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-stat text-[11px] text-ink-muted">
-            {player.team}
-          </p>
-          <h3 className="truncate font-display text-lg font-bold tracking-tight text-ink">
-            {player.player}
-          </h3>
-          <p className="font-stat text-[11px] text-ink-muted">
-            {ROLE_LABELS[player.position]}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <PlayerAvatar
+            player={player.player}
+            team={player.team}
+            assets={assets}
+            className="size-11 rounded-full"
+          />
+          <div className="min-w-0">
+            <p className="truncate font-stat text-[11px] text-ink-muted">
+              {player.team}
+            </p>
+            <h3 className="truncate font-display text-lg font-bold tracking-tight text-ink">
+              {player.player}
+            </h3>
+            <p className="font-stat text-[11px] text-ink-muted">
+              {ROLE_LABELS[player.position]}
+            </p>
+          </div>
         </div>
         <div className="shrink-0 text-right">
           <p className="font-stat text-xs tabular-nums text-gold">
@@ -95,8 +111,10 @@ function RadarCard({ player }: { player: PlayerRoleProfile }) {
 
 export default function PlayersRadarCards({
   players,
+  assets,
 }: {
   players: PlayerRoleProfile[];
+  assets?: EsportsAssets;
 }) {
   const [activeRole, setActiveRole] = useState<RoleFilter>("all");
   const roleGroups = useMemo(
@@ -151,6 +169,7 @@ export default function PlayersRadarCards({
                 <RadarCard
                   key={`${player.player_id}:${player.position}`}
                   player={player}
+                  assets={assets}
                 />
               ))}
             </div>

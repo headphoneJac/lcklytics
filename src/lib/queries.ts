@@ -24,6 +24,7 @@ import type {
 export const DEFAULT_SPLIT_KEY = '__all__'
 
 const PAGE_SIZE = 1000
+const MIN_RADAR_SCORE = 10
 
 const PLAYER_PROFILE_COLUMNS =
   'player_id, player, team, position, games_played, wins, win_rate_pct, total_kills, total_deaths, total_assists, avg_kills, avg_deaths, avg_assists, kda, avg_kill_participation_pct, avg_dpm, avg_gold_per_min, avg_damage_share, avg_vision_score, avg_wards_placed, avg_wards_killed, avg_control_wards_bought, avg_cspm, avg_gd15, avg_xpd15, avg_csd15, first_blood_pct, first_tower_pct'
@@ -270,6 +271,10 @@ type RawRecentGameScope = {
   game_date: string
 }
 
+type RawDashboardGameScope = {
+  game_id: string
+}
+
 type SupabaseNestedTeam = { name: string } | { name: string }[] | null
 
 type RawRecentGameSide = Omit<RecentGameSide, 'teams'> & {
@@ -352,6 +357,7 @@ async function fetchRowsByGameIds<T>(
   table: string,
   columns: string,
   gameIds: string[],
+  orderColumns = ['game_id'],
 ): Promise<T[]> {
   if (gameIds.length === 0) return []
 
@@ -359,13 +365,29 @@ async function fetchRowsByGameIds<T>(
 
   for (let start = 0; start < gameIds.length; start += PAGE_SIZE) {
     const gameIdChunk = gameIds.slice(start, start + PAGE_SIZE)
-    const { data, error } = await supabase
-      .from(table)
-      .select(columns)
-      .in('game_id', gameIdChunk)
+    let rowStart = 0
 
-    if (error) throw error
-    rows.push(...((data ?? []) as T[]))
+    while (true) {
+      let query = supabase
+        .from(table)
+        .select(columns)
+        .in('game_id', gameIdChunk)
+
+      for (const column of orderColumns) {
+        query = query.order(column, { ascending: true })
+      }
+
+      const { data, error } = await query.range(
+        rowStart,
+        rowStart + PAGE_SIZE - 1,
+      )
+
+      if (error) throw error
+      rows.push(...((data ?? []) as T[]))
+
+      if (!data || data.length < PAGE_SIZE) break
+      rowStart += PAGE_SIZE
+    }
   }
 
   return rows
@@ -469,6 +491,12 @@ export async function getTeamSideProfiles(
       red_wins: red?.wins ?? 0,
       red_win_rate_pct: red?.win_rate_pct ?? 0,
       side_delta_pct: sideDelta,
+      first_pick_games_played: 0,
+      first_pick_wins: 0,
+      first_pick_win_rate_pct: 0,
+      second_pick_games_played: 0,
+      second_pick_wins: 0,
+      second_pick_win_rate_pct: 0,
     }
   })
 }
@@ -495,8 +523,9 @@ function normalizeMetric(
   const normalized = lowerIsBetter
     ? ((max - value) / (max - min)) * 100
     : ((value - min) / (max - min)) * 100
+  const scaled = MIN_RADAR_SCORE + normalized * ((100 - MIN_RADAR_SCORE) / 100)
 
-  return Math.round(Math.min(Math.max(normalized, 0), 100))
+  return Math.round(Math.min(Math.max(scaled, MIN_RADAR_SCORE), 100))
 }
 
 function buildRadarMetric(
@@ -561,6 +590,16 @@ function attachRoleRadars(players: PlayerRoleProfile[]) {
   return players
 }
 
+async function getDashboardGameIdsForSplitScope(splitKey: string) {
+  const rows = await fetchScopedRows<RawDashboardGameScope>(
+    'dashboard_game_scopes',
+    'game_id',
+    splitKey,
+  )
+
+  return rows.map((row) => row.game_id)
+}
+
 async function getGameIdsForTeamSplitScope(
   splitKey: string,
 ): Promise<string[] | null> {
@@ -594,7 +633,7 @@ async function getGameIdsForTeamSplitScope(
         (game) => game.game_id,
       )
     default:
-      return null
+      return getDashboardGameIdsForSplitScope(splitKey)
   }
 }
 
@@ -603,6 +642,7 @@ async function getTimeline15ByPlayerGame(gameIds: string[]) {
     'game_player_timeline',
     'game_id, player_id, minute, gold_diff, xp_diff, cs_diff',
     gameIds,
+    ['game_id', 'player_id', 'minute'],
   )
 
   return new Map(
@@ -617,6 +657,7 @@ async function getObjectivesByTeamGame(gameIds: string[]) {
     'game_team_stats',
     'game_id, team_id, team_kills, first_blood, first_tower',
     gameIds,
+    ['game_id', 'team_id'],
   )
 
   return new Map(
@@ -650,6 +691,7 @@ async function getPlayerRoleProfilesForGameIds(
         'game_player_stats',
         'game_id, player_id, team_id, position, champion, result, kills, deaths, assists, earned_gold, dpm, damage_share, vision_score, wards_placed, wards_killed, control_wards_bought, cspm, players ( name ), teams ( name )',
         gameIds,
+        ['game_id', 'player_id'],
       ),
       getTimeline15ByPlayerGame(gameIds),
       getObjectivesByTeamGame(gameIds),
@@ -895,11 +937,13 @@ async function getChampionProfilesForGameIds(
       'game_player_stats',
       'game_id, player_id, team_id, position, champion, result, kills, deaths, assists, dpm, damage_share, vision_score, wards_placed, wards_killed, control_wards_bought, cspm, players ( name ), teams ( name )',
       gameIds,
+      ['game_id', 'player_id'],
     ),
     fetchRowsByGameIds<RawScopedDraftAction>(
       'draft_actions',
       'game_id, action_type, champion',
       gameIds,
+      ['game_id', 'side', 'action_type', 'action_order'],
     ),
   ])
 
@@ -1379,6 +1423,7 @@ type RawHomeGame = {
 type RawHomeTeamSide = {
   game_id: string
   side: string
+  first_pick: boolean | null
   result: boolean
   teams: SupabaseNestedTeam
 }
@@ -1582,7 +1627,7 @@ async function getTeamSidesForGames(gameIds: string[]): Promise<RawHomeTeamSide[
     const gameIdChunk = gameIds.slice(start, start + PAGE_SIZE)
     const { data, error } = await supabase
       .from('game_team_stats')
-      .select('game_id, side, result, teams ( name )')
+      .select('game_id, side, first_pick, result, teams ( name )')
       .in('game_id', gameIdChunk)
 
     if (error) throw error
@@ -1695,6 +1740,12 @@ function buildTeamSideProfiles(
         red_wins: 0,
         red_win_rate_pct: 0,
         side_delta_pct: null,
+        first_pick_games_played: 0,
+        first_pick_wins: 0,
+        first_pick_win_rate_pct: 0,
+        second_pick_games_played: 0,
+        second_pick_wins: 0,
+        second_pick_win_rate_pct: 0,
       } satisfies TeamSideProfile)
 
     teams.set(team, current)
@@ -1741,6 +1792,14 @@ function buildTeamSideProfiles(
       team.red_games_played += 1
       team.red_wins += side.result ? 1 : 0
     }
+
+    if (side.first_pick === true) {
+      team.first_pick_games_played += 1
+      team.first_pick_wins += side.result ? 1 : 0
+    } else if (side.first_pick === false) {
+      team.second_pick_games_played += 1
+      team.second_pick_wins += side.result ? 1 : 0
+    }
   }
 
   return Array.from(teams.values())
@@ -1767,6 +1826,14 @@ function buildTeamSideProfiles(
         blue_win_rate_pct: blueWinRate,
         red_win_rate_pct: redWinRate,
         side_delta_pct: sideDelta,
+        first_pick_win_rate_pct: pct(
+          team.first_pick_wins,
+          team.first_pick_games_played,
+        ),
+        second_pick_win_rate_pct: pct(
+          team.second_pick_wins,
+          team.second_pick_games_played,
+        ),
       }
     })
     .sort((a, b) => {
@@ -2146,13 +2213,11 @@ const SEASON_PLAYOFF_BRACKET: BracketMatchDefinition[] = [
     teamA: 'Hanwha Life Esports',
     teamB: 'T1',
     label: 'Lower Finals',
-    placeholderScore: 'BO5',
   },
   {
     stage: 'Grand Finals',
     teamA: 'Gen.G',
-    teamB: 'TBD',
-    placeholderScore: 'BO5',
+    teamB: 'Hanwha Life Esports',
   },
 ]
 

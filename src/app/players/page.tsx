@@ -1,6 +1,9 @@
 import PlayersRadarCards from "@/components/players/PlayersRadarCards";
 import PlayersSummaryTable from "@/components/players/PlayersSummaryTable";
 import SplitSelector from "@/components/SplitSelector";
+import TeamLogo from "@/components/images/TeamLogo";
+import { playerRowBackgroundStyle } from "@/components/images/row-background";
+import { getLckEsportsAssets } from "@/lib/esports-assets";
 import {
   DEFAULT_SPLIT_KEY,
   TEAMS_CUP_POSTSEASON_SPLIT_KEY,
@@ -15,6 +18,7 @@ import {
   type SplitSearchParams,
 } from "@/lib/splits";
 import type { PlayerRole, PlayerRoleProfile } from "@/lib/types";
+import type { EsportsAssets } from "@/lib/assets";
 
 const ROLE_LABELS: Record<PlayerRole, string> = {
   top: "Top",
@@ -54,20 +58,40 @@ function LeaderStat({
   player,
   value,
   detail,
+  assets,
 }: {
   label: string;
   player?: PlayerRoleProfile;
   value: string;
   detail: string;
+  assets?: EsportsAssets;
 }) {
   return (
-    <div className="border-l border-white/10 pl-4">
+    <div
+      className="asset-bg-leader-card border-r border-white/10 py-4 pl-1 pr-1"
+      style={
+        player
+          ? playerRowBackgroundStyle(player.player, player.team, assets)
+          : undefined
+      }
+    >
       <p className="text-xs uppercase text-ink-muted">{label}</p>
-      <p className="mt-2 font-display text-2xl font-bold tracking-tight text-ink">
-        {player?.player ?? "TBD"}
-      </p>
+      <div className="mt-2">
+        <p className="min-w-0 truncate font-display text-2xl font-bold tracking-tight text-ink">
+          {player?.player ?? "TBD"}
+        </p>
+      </div>
       <p className="mt-1 font-stat text-sm tabular-nums text-gold">{value}</p>
-      <p className="mt-1 text-xs text-ink-muted">{detail}</p>
+      <p className="mt-1 flex items-center gap-1.5 text-xs">
+        {player ? (
+          <TeamLogo
+            team={player.team}
+            assets={assets}
+            className="size-5 rounded-sm"
+          />
+        ) : null}
+        <span>{detail}</span>
+      </p>
     </div>
   );
 }
@@ -82,7 +106,10 @@ export default async function PlayersPage({
   const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
     ? requestedSplitKey
     : DEFAULT_SPLIT_KEY;
-  const players = await getPlayerRoleProfiles(splitKey);
+  const [players, esportsAssets] = await Promise.all([
+    getPlayerRoleProfiles(splitKey),
+    getLckEsportsAssets(),
+  ]);
   const currentSplit = getSplitLabel(splits, splitKey);
   const minimumLeaderboardGames = getMinimumLeaderboardGames(splitKey);
   const leaderboardPlayers = players.filter(
@@ -118,10 +145,11 @@ export default async function PlayersPage({
         </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-5">
+      <section className="grid grid-cols-1 gap-2 md:grid-cols-3 lg:grid-cols-5">
         <LeaderStat
           label="KDA leader"
           player={kdaLeader}
+          assets={esportsAssets}
           value={kdaLeader ? kdaLeader.kda.toFixed(2) : "0.00"}
           detail={
             kdaLeader
@@ -132,6 +160,7 @@ export default async function PlayersPage({
         <LeaderStat
           label="First blood leader"
           player={firstBloodLeader}
+          assets={esportsAssets}
           value={
             firstBloodLeader
               ? `${firstBloodLeader.first_blood_pct.toFixed(1)}%`
@@ -146,6 +175,7 @@ export default async function PlayersPage({
         <LeaderStat
           label="DPM leader"
           player={damageLeader}
+          assets={esportsAssets}
           value={damageLeader ? String(damageLeader.avg_dpm) : "0"}
           detail={
             damageLeader
@@ -156,6 +186,7 @@ export default async function PlayersPage({
         <LeaderStat
           label="Highest CS/min"
           player={csLeader}
+          assets={esportsAssets}
           value={csLeader ? csLeader.avg_cspm.toFixed(1) : "0.0"}
           detail={
             csLeader
@@ -166,6 +197,7 @@ export default async function PlayersPage({
         <LeaderStat
           label="Vision leader"
           player={visionLeader}
+          assets={esportsAssets}
           value={
             visionLeader ? visionLeader.avg_vision_score.toFixed(1) : "0.0"
           }
@@ -183,9 +215,9 @@ export default async function PlayersPage({
           : "Leaderboards include all players in this scope."}
       </p>
 
-      <PlayersRadarCards players={players} />
+      <PlayersRadarCards players={players} assets={esportsAssets} />
 
-      <PlayersSummaryTable players={players} />
+      <PlayersSummaryTable players={players} assets={esportsAssets} />
     </div>
   );
 }

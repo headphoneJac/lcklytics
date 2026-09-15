@@ -10,6 +10,13 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+For team logos and player headshots, add a server-only LoL Esports persisted
+API key. Champion icons come from Riot Data Dragon and do not need a key.
+
+```bash
+LOLESPORTS_API_KEY="..."
+```
+
 ## Oracle's Elixir Updater
 
 Run the log table SQL once in Supabase:

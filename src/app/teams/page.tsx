@@ -1,5 +1,8 @@
 import SplitSelector from "@/components/SplitSelector";
+import TeamLogo from "@/components/images/TeamLogo";
+import { teamRowBackgroundStyle } from "@/components/images/row-background";
 import TournamentBracket from "@/components/TournamentBracket";
+import { getLckEsportsAssets } from "@/lib/esports-assets";
 import {
   CUP_GROUPS,
   DEFAULT_SPLIT_KEY,
@@ -14,6 +17,7 @@ import {
   type SplitSearchParams,
 } from "@/lib/splits";
 import type { TeamSideProfile } from "@/lib/types";
+import type { EsportsAssets } from "@/lib/assets";
 
 function formatPct(value: number) {
   return `${value.toFixed(1)}%`;
@@ -25,8 +29,18 @@ function formatRecord(wins: number, games: number) {
 
 function pickBest(
   teams: TeamSideProfile[],
-  key: "win_rate_pct" | "blue_win_rate_pct" | "red_win_rate_pct",
-  volumeKey: "games_played" | "blue_games_played" | "red_games_played",
+  key:
+    | "win_rate_pct"
+    | "blue_win_rate_pct"
+    | "red_win_rate_pct"
+    | "first_pick_win_rate_pct"
+    | "second_pick_win_rate_pct",
+  volumeKey:
+    | "games_played"
+    | "blue_games_played"
+    | "red_games_played"
+    | "first_pick_games_played"
+    | "second_pick_games_played",
 ) {
   return [...teams].sort((a, b) => {
     if (b[key] !== a[key]) return b[key] - a[key];
@@ -85,20 +99,32 @@ function LeaderStat({
   team,
   value,
   detail,
-  colorClass = "text-gold",
+  assets,
+  colorClass,
 }: {
   label: string;
   team?: TeamSideProfile;
   value: string;
   detail: string;
+  assets?: EsportsAssets;
   colorClass?: string;
 }) {
   return (
-    <div className="border-l border-white/10 pl-4">
+    <div
+      className="asset-bg-leader-card border-r border-white/10 py-4 pl-1 pr-1"
+      style={team ? teamRowBackgroundStyle(team.team, assets) : undefined}
+    >
       <p className="text-xs uppercase text-ink-muted">{label}</p>
-      <p className="mt-2 font-display text-2xl font-bold tracking-tight text-ink">
-        {team?.team ?? "TBD"}
-      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <TeamLogo
+          team={team?.team ?? "TBD"}
+          assets={assets}
+          className="size-9 rounded"
+        />
+        <p className="min-w-0 truncate font-display text-2xl font-bold tracking-tight text-ink">
+          {team?.team ?? "TBD"}
+        </p>
+      </div>
       <p className={`mt-1 font-stat text-sm tabular-nums ${colorClass}`}>
         {value}
       </p>
@@ -110,9 +136,11 @@ function LeaderStat({
 function TeamCard({
   team,
   index,
+  assets,
 }: {
   team: TeamSideProfile;
   index: number;
+  assets?: EsportsAssets;
 }) {
   return (
     <article
@@ -120,11 +148,18 @@ function TeamCard({
       className="rounded-lg border border-white/10 bg-surface/60 p-3"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-stat text-xs text-ink-muted">#{index + 1}</p>
-          <h2 className="mt-1 truncate font-display text-lg font-bold tracking-tight text-ink">
-            {team.team}
-          </h2>
+        <div className="flex min-w-0 items-center gap-3">
+          <TeamLogo
+            team={team.team}
+            assets={assets}
+            className="size-11 rounded"
+          />
+          <div className="min-w-0">
+            <p className="font-stat text-xs text-ink-muted">#{index + 1}</p>
+            <h2 className="mt-1 truncate font-display text-lg font-bold tracking-tight text-ink">
+              {team.team}
+            </h2>
+          </div>
         </div>
         <div className="shrink-0 text-right">
           <p className="font-stat text-sm tabular-nums text-gold">
@@ -136,9 +171,7 @@ function TeamCard({
 
       <div className="mt-4 grid grid-cols-3 gap-2 border-y border-white/5 py-3 text-xs">
         <div>
-          <p className="font-stat tabular-nums text-ink">
-            {team.games_played}
-          </p>
+          <p className="font-stat tabular-nums text-ink">{team.games_played}</p>
           <p className="text-xs text-ink-muted">games</p>
         </div>
         <div>
@@ -151,7 +184,7 @@ function TeamCard({
           <p className="font-stat tabular-nums text-gold">
             {formatPct(team.win_rate_pct)}
           </p>
-          <p className="text-xs text-ink-muted">both sides</p>
+          <p className="text-xs text-ink-muted">win rate</p>
         </div>
       </div>
 
@@ -171,15 +204,22 @@ function TeamCard({
           colorClass="bg-red-side"
         />
         <SideMeter
-          label="Both sides"
-          wins={team.game_wins}
-          games={team.games_played}
-          rate={team.win_rate_pct}
+          label="First pick"
+          wins={team.first_pick_wins}
+          games={team.first_pick_games_played}
+          rate={team.first_pick_win_rate_pct}
           colorClass="bg-gold"
+        />
+        <SideMeter
+          label="Second pick"
+          wins={team.second_pick_wins}
+          games={team.second_pick_games_played}
+          rate={team.second_pick_win_rate_pct}
+          colorClass="bg-silver"
         />
       </div>
 
-      <p className="mt-4 text-sm">
+      <p className="mt-4 border-t border-white/5 pt-3 text-sm">
         <SideRead team={team} />
       </p>
     </article>
@@ -204,7 +244,9 @@ function getTeamCardGroups(splitKey: string, teams: TeamSideProfile[]) {
     name: group.name,
     teams: group.teams
       .map((groupTeam) => {
-        return teamsByName.get(groupTeam.label) ?? teamsByName.get(groupTeam.dbName);
+        return (
+          teamsByName.get(groupTeam.label) ?? teamsByName.get(groupTeam.dbName)
+        );
       })
       .filter((team): team is TeamSideProfile => Boolean(team)),
   }));
@@ -220,14 +262,25 @@ export default async function TeamsPage({
   const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
     ? requestedSplitKey
     : DEFAULT_SPLIT_KEY;
-  const [teams, bracketSections] = await Promise.all([
+  const [teams, bracketSections, esportsAssets] = await Promise.all([
     getTeamPageSideProfiles(splitKey),
     getTeamBracketSections(splitKey),
+    getLckEsportsAssets(),
   ]);
   const currentSplit = getSplitLabel(splits, splitKey);
   const bestOverall = pickBest(teams, "win_rate_pct", "games_played");
   const bestBlue = pickBest(teams, "blue_win_rate_pct", "blue_games_played");
   const bestRed = pickBest(teams, "red_win_rate_pct", "red_games_played");
+  const bestFirstPick = pickBest(
+    teams,
+    "first_pick_win_rate_pct",
+    "first_pick_games_played",
+  );
+  const bestSecondPick = pickBest(
+    teams,
+    "second_pick_win_rate_pct",
+    "second_pick_games_played",
+  );
   const teamCardGroups = getTeamCardGroups(splitKey, teams);
 
   return (
@@ -245,8 +298,8 @@ export default async function TeamsPage({
             LCK Team Dashboard
           </h1>
           <p className="mt-2 max-w-2xl text-ink-muted">
-            Regular-season standings with blue side, red side, and combined side
-            win rates for every team.
+            Regular-season standings with side selection and pick-order win
+            rates for every team.
           </p>
         </div>
         <p className="font-stat text-xs text-ink-muted">
@@ -254,20 +307,23 @@ export default async function TeamsPage({
         </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
+      <section className="grid grid-cols-1 gap-2 md:grid-cols-3 lg:grid-cols-5">
         <LeaderStat
           label="Best overall"
           team={bestOverall}
+          assets={esportsAssets}
           value={bestOverall ? formatPct(bestOverall.win_rate_pct) : "0.0%"}
           detail={
             bestOverall
               ? `${bestOverall.game_wins}-${bestOverall.game_losses} game record`
               : "No games found"
           }
+          colorClass="text-green"
         />
         <LeaderStat
           label="Best blue side"
           team={bestBlue}
+          assets={esportsAssets}
           value={bestBlue ? formatPct(bestBlue.blue_win_rate_pct) : "0.0%"}
           detail={
             bestBlue
@@ -279,6 +335,7 @@ export default async function TeamsPage({
         <LeaderStat
           label="Best red side"
           team={bestRed}
+          assets={esportsAssets}
           value={bestRed ? formatPct(bestRed.red_win_rate_pct) : "0.0%"}
           detail={
             bestRed
@@ -286,6 +343,44 @@ export default async function TeamsPage({
               : "No red-side games found"
           }
           colorClass="text-red-side"
+        />
+        <LeaderStat
+          label="Best first pick"
+          team={bestFirstPick}
+          assets={esportsAssets}
+          value={
+            bestFirstPick
+              ? formatPct(bestFirstPick.first_pick_win_rate_pct)
+              : "0.0%"
+          }
+          detail={
+            bestFirstPick
+              ? formatRecord(
+                  bestFirstPick.first_pick_wins,
+                  bestFirstPick.first_pick_games_played,
+                )
+              : "No first-pick games found"
+          }
+          colorClass="text-gold"
+        />
+        <LeaderStat
+          label="Best second pick"
+          team={bestSecondPick}
+          assets={esportsAssets}
+          value={
+            bestSecondPick
+              ? formatPct(bestSecondPick.second_pick_win_rate_pct)
+              : "0.0%"
+          }
+          detail={
+            bestSecondPick
+              ? formatRecord(
+                  bestSecondPick.second_pick_wins,
+                  bestSecondPick.second_pick_games_played,
+                )
+              : "No second-pick games found"
+          }
+          colorClass="text-silver"
         />
       </section>
 
@@ -305,7 +400,12 @@ export default async function TeamsPage({
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
               {group.teams.map((team, index) => (
-                <TeamCard key={team.team} team={team} index={index} />
+                <TeamCard
+                  key={team.team}
+                  team={team}
+                  index={index}
+                  assets={esportsAssets}
+                />
               ))}
             </div>
           </div>
@@ -320,6 +420,7 @@ export default async function TeamsPage({
               title={section.title}
               matches={section.matches}
               emptyText={section.emptyText}
+              assets={esportsAssets}
             />
           ))}
         </section>
@@ -327,33 +428,43 @@ export default async function TeamsPage({
 
       <section>
         <h2 className="font-display text-lg font-semibold tracking-tight">
-          Side Win Rate Table
+          Teams Summary Table
         </h2>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-ink-muted">
                 <th className="py-2 font-normal">Team</th>
                 <th className="py-2 text-right font-normal">Match</th>
                 <th className="py-2 text-right font-normal">Game</th>
-                <th className="py-2 text-right font-normal">Blue WR</th>
-                <th className="py-2 text-right font-normal">Red WR</th>
-                <th className="py-2 text-right font-normal">Both WR</th>
+                <th className="py-2 text-right font-normal">Win Rate</th>
+                <th className="py-2 text-right font-normal">Blue Side WR</th>
+                <th className="py-2 text-right font-normal">Red Side WR</th>
+                <th className="py-2 text-right font-normal">1st Pick WR</th>
+                <th className="py-2 text-right font-normal">2nd Pick WR</th>
                 <th className="py-2 text-right font-normal">Side Read</th>
               </tr>
             </thead>
             <tbody className="font-stat tabular-nums">
               {teams.map((team, index) => (
                 <tr key={team.team} className="border-b border-white/5">
-                  <td className="py-2 font-body">
-                    <span className="mr-2 text-ink-muted">{index + 1}</span>
-                    {team.team}
+                  <td
+                    className="asset-bg-name-cell py-2 font-body"
+                    style={teamRowBackgroundStyle(team.team, esportsAssets)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-5 text-ink-muted">{index + 1}</span>
+                      <span>{team.team}</span>
+                    </span>
                   </td>
                   <td className="py-2 text-right">
                     {team.match_wins}-{team.match_losses}
                   </td>
                   <td className="py-2 text-right text-ink-muted">
                     {team.game_wins}-{team.game_losses}
+                  </td>
+                  <td className="py-2 text-right text-green">
+                    {formatPct(team.win_rate_pct)}
                   </td>
                   <td className="py-2 text-right text-blue-side">
                     {formatPct(team.blue_win_rate_pct)}
@@ -362,7 +473,10 @@ export default async function TeamsPage({
                     {formatPct(team.red_win_rate_pct)}
                   </td>
                   <td className="py-2 text-right text-gold">
-                    {formatPct(team.win_rate_pct)}
+                    {formatPct(team.first_pick_win_rate_pct)}
+                  </td>
+                  <td className="py-2 text-right text-silver">
+                    {formatPct(team.second_pick_win_rate_pct)}
                   </td>
                   <td className="py-2 text-right">
                     <SideRead team={team} />

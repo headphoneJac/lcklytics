@@ -1,4 +1,6 @@
 import type { HomeBracketSeries } from "@/lib/types";
+import TeamLogo from "@/components/images/TeamLogo";
+import type { EsportsAssets } from "@/lib/assets";
 
 function teamCode(team: string) {
   const codes: Record<string, string> = {
@@ -19,7 +21,13 @@ function teamCode(team: string) {
   return codes[team] ?? team;
 }
 
-function BracketMatch({ match }: { match: HomeBracketSeries }) {
+function BracketMatch({
+  match,
+  assets,
+}: {
+  match: HomeBracketSeries;
+  assets?: EsportsAssets;
+}) {
   const teamAWon = match.winner === match.team_a;
   const teamBWon = match.winner === match.team_b;
 
@@ -37,8 +45,13 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
             teamAWon ? "bg-emerald-900/70 text-ink" : "text-ink-muted"
           }`}
         >
-          <span className="truncate px-2 font-body font-semibold">
-            {teamCode(match.team_a)}
+          <span className="flex min-w-0 items-center gap-1 px-2 font-body font-semibold">
+            <TeamLogo
+              team={match.team_a}
+              assets={assets}
+              className="size-4 rounded-sm"
+            />
+            <span className="truncate">{teamCode(match.team_a)}</span>
           </span>
           <span className="border-l border-white/15 px-2 text-right text-ink">
             {match.score_a}
@@ -49,8 +62,13 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
             teamBWon ? "bg-emerald-900/70 text-ink" : "text-ink-muted"
           }`}
         >
-          <span className="truncate px-2 font-body font-semibold">
-            {teamCode(match.team_b)}
+          <span className="flex min-w-0 items-center gap-1 px-2 font-body font-semibold">
+            <TeamLogo
+              team={match.team_b}
+              assets={assets}
+              className="size-4 rounded-sm"
+            />
+            <span className="truncate">{teamCode(match.team_b)}</span>
           </span>
           <span className="border-l border-white/15 px-2 text-right text-ink">
             {match.score_b}
@@ -177,10 +195,12 @@ export default function TournamentBracket({
   title,
   matches,
   emptyText,
+  assets,
 }: {
   title: string;
   matches: HomeBracketSeries[];
   emptyText: string;
+  assets?: EsportsAssets;
 }) {
   const stages = Array.from(new Set(matches.map((match) => match.stage)));
   const rounds = stages.map((stage) => ({
@@ -271,7 +291,7 @@ export default function TournamentBracket({
                 className="absolute"
                 style={{ left: positioned.x, top: positioned.y }}
               >
-                <BracketMatch match={positioned.match} />
+                <BracketMatch match={positioned.match} assets={assets} />
               </div>
             ))}
           </div>

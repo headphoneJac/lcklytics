@@ -37,6 +37,15 @@ export default function RootLayout({
       <body>
         <NavBar />
         <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+        <footer className="mx-auto max-w-6xl px-6 pb-8 text-xs leading-5 text-ink-muted">
+          <p>
+            lcklytics is not endorsed by Riot Games and does not reflect the
+            views or opinions of Riot Games or anyone officially involved in
+            producing or managing Riot Games properties. Riot Games and all
+            associated properties are trademarks or registered trademarks of
+            Riot Games, Inc.
+          </p>
+        </footer>
       </body>
     </html>
   );

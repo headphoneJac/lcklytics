@@ -25,6 +25,12 @@ export interface TeamSideProfile extends TeamStanding {
   red_wins: number
   red_win_rate_pct: number
   side_delta_pct: number | null
+  first_pick_games_played: number
+  first_pick_wins: number
+  first_pick_win_rate_pct: number
+  second_pick_games_played: number
+  second_pick_wins: number
+  second_pick_win_rate_pct: number
 }
 
 export interface DashboardSplitOption {

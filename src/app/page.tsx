@@ -1,4 +1,8 @@
+import TeamLogo from "@/components/images/TeamLogo";
+import { teamRowBackgroundStyle } from "@/components/images/row-background";
+import { getLckEsportsAssets } from "@/lib/esports-assets";
 import { getHomeSeasonOverview } from "@/lib/queries";
+import type { EsportsAssets } from "@/lib/assets";
 import type {
   HomeBracketSeries,
   HomeStandingRow,
@@ -34,9 +38,11 @@ function SectionHeader({
 function StandingsTable({
   title,
   standings,
+  assets,
 }: {
   title: string;
   standings: HomeStandingRow[];
+  assets?: EsportsAssets;
 }) {
   return (
     <div>
@@ -56,10 +62,18 @@ function StandingsTable({
           <tbody className="font-stat tabular-nums">
             {standings.map((team, index) => {
               return (
-                <tr key={team.team} className="border-b border-white/5">
-                  <td className="py-2 font-body">
-                    <span className="mr-2 text-ink-muted">{index + 1}</span>
-                    {team.team}
+                <tr
+                  key={team.team}
+                  className="border-b border-white/5"
+                >
+                  <td
+                    className="asset-bg-name-cell py-2 font-body"
+                    style={teamRowBackgroundStyle(team.team, assets)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-5 text-ink-muted">{index + 1}</span>
+                      <span>{team.team}</span>
+                    </span>
                   </td>
                   <td className="py-2 text-right text-gold">
                     {record(team.match_wins, team.match_losses)}
@@ -77,12 +91,22 @@ function StandingsTable({
   );
 }
 
-function GroupStandings({ groups }: { groups: HomeTeamGroup[] }) {
+function GroupStandings({
+  groups,
+  assets,
+}: {
+  groups: HomeTeamGroup[];
+  assets?: EsportsAssets;
+}) {
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       {groups.map((group) => (
         <div key={group.name}>
-          <StandingsTable title={group.name} standings={group.standings} />
+          <StandingsTable
+            title={group.name}
+            standings={group.standings}
+            assets={assets}
+          />
         </div>
       ))}
     </div>
@@ -107,7 +131,13 @@ function teamCode(team: string) {
   return codes[team] ?? team;
 }
 
-function BracketMatch({ match }: { match: HomeBracketSeries }) {
+function BracketMatch({
+  match,
+  assets,
+}: {
+  match: HomeBracketSeries;
+  assets?: EsportsAssets;
+}) {
   const teamAWon = match.winner === match.team_a;
   const teamBWon = match.winner === match.team_b;
 
@@ -125,8 +155,13 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
             teamAWon ? "bg-emerald-900/70 text-ink" : "text-ink-muted"
           }`}
         >
-          <span className="truncate px-2 font-body font-semibold">
-            {teamCode(match.team_a)}
+          <span className="flex min-w-0 items-center gap-1 px-2 font-body font-semibold">
+            <TeamLogo
+              team={match.team_a}
+              assets={assets}
+              className="size-4 rounded-sm"
+            />
+            <span className="truncate">{teamCode(match.team_a)}</span>
           </span>
           <span className="border-l border-white/15 px-2 text-right text-ink">
             {match.score_a}
@@ -137,8 +172,13 @@ function BracketMatch({ match }: { match: HomeBracketSeries }) {
             teamBWon ? "bg-emerald-900/70 text-ink" : "text-ink-muted"
           }`}
         >
-          <span className="truncate px-2 font-body font-semibold">
-            {teamCode(match.team_b)}
+          <span className="flex min-w-0 items-center gap-1 px-2 font-body font-semibold">
+            <TeamLogo
+              team={match.team_b}
+              assets={assets}
+              className="size-4 rounded-sm"
+            />
+            <span className="truncate">{teamCode(match.team_b)}</span>
           </span>
           <span className="border-l border-white/15 px-2 text-right text-ink">
             {match.score_b}
@@ -255,10 +295,12 @@ function Bracket({
   title,
   matches,
   emptyText,
+  assets,
 }: {
   title: string;
   matches: HomeBracketSeries[];
   emptyText: string;
+  assets?: EsportsAssets;
 }) {
   const stages = Array.from(new Set(matches.map((match) => match.stage)));
   const rounds = stages.map((stage) => ({
@@ -349,7 +391,7 @@ function Bracket({
                 className="absolute"
                 style={{ left: positioned.x, top: positioned.y }}
               >
-                <BracketMatch match={positioned.match} />
+                <BracketMatch match={positioned.match} assets={assets} />
               </div>
             ))}
           </div>
@@ -360,7 +402,10 @@ function Bracket({
 }
 
 export default async function HomePage() {
-  const overview = await getHomeSeasonOverview();
+  const [overview, esportsAssets] = await Promise.all([
+    getHomeSeasonOverview(),
+    getLckEsportsAssets(),
+  ]);
 
   return (
     <div className="flex flex-col gap-14">
@@ -382,18 +427,20 @@ export default async function HomePage() {
           description="Group Stage teams are shown in Group Baron and Group Dragon. Bracket results are pulled from the loaded Cup series after group play."
         />
 
-        <GroupStandings groups={overview.cup.groups} />
+        <GroupStandings groups={overview.cup.groups} assets={esportsAssets} />
 
         <Bracket
           title="Play-In"
           matches={overview.cup.playIn}
           emptyText="No LCK Cup play-in or playoff results are loaded yet."
+          assets={esportsAssets}
         />
 
         <Bracket
           title="Playoffs"
           matches={overview.cup.playoffs}
           emptyText="No LCK Cup playoff results are loaded yet."
+          assets={esportsAssets}
         />
       </section>
 
@@ -406,6 +453,7 @@ export default async function HomePage() {
         <StandingsTable
           title="Rounds 1-2 Standings"
           standings={overview.roundsOneTwo.standings}
+          assets={esportsAssets}
         />
       </section>
 
@@ -415,6 +463,7 @@ export default async function HomePage() {
           title="Road to MSI Bracket"
           matches={overview.roadToMsi.bracket}
           emptyText="No Road to MSI results are loaded yet."
+          assets={esportsAssets}
         />
       </section>
 
@@ -424,7 +473,10 @@ export default async function HomePage() {
           title="Rounds 3-4"
           description="Legend Group and Rise Group standings include the carried-over Rounds 1-2 record plus loaded Rounds 3-4 matches."
         />
-        <GroupStandings groups={overview.roundsThreeFour.groups} />
+        <GroupStandings
+          groups={overview.roundsThreeFour.groups}
+          assets={esportsAssets}
+        />
       </section>
 
       <section className="flex flex-col gap-6">
@@ -436,11 +488,13 @@ export default async function HomePage() {
           title="Season Play-In"
           matches={overview.seasonFinals.playIn}
           emptyText="No Season Play-In results are loaded yet."
+          assets={esportsAssets}
         />
         <Bracket
           title="Season Playoffs"
           matches={overview.seasonFinals.playoffs}
           emptyText="No Season Playoff results are loaded yet."
+          assets={esportsAssets}
         />
       </section>
     </div>

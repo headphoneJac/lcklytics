@@ -1,8 +1,12 @@
 import PlayerChampionMatchup from "@/components/matchups/PlayerChampionMatchup";
+import { getLckEsportsAssets } from "@/lib/esports-assets";
 import { getPlayerChampionMatchups } from "@/lib/queries";
 
 export default async function MatchupsPage() {
-  const matchups = await getPlayerChampionMatchups();
+  const [matchups, esportsAssets] = await Promise.all([
+    getPlayerChampionMatchups(),
+    getLckEsportsAssets(),
+  ]);
 
   return (
     <div className="flex flex-col gap-10">
@@ -19,7 +23,7 @@ export default async function MatchupsPage() {
         </div>
       </section>
 
-      <PlayerChampionMatchup matchups={matchups} />
+      <PlayerChampionMatchup matchups={matchups} assets={esportsAssets} />
     </div>
   );
 }

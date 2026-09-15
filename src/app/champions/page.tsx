@@ -1,4 +1,5 @@
 import SplitSelector from "@/components/SplitSelector";
+import { championRowBackgroundStyle } from "@/components/images/row-background";
 import {
   DEFAULT_SPLIT_KEY,
   getChampionProfiles,
@@ -74,10 +75,18 @@ function Leaderboard({
         </thead>
         <tbody className="font-stat tabular-nums">
           {champions.map((champion, index) => (
-            <tr key={champion.champion} className="border-b border-white/5">
-              <td className="py-2 font-body">
-                <span className="mr-2 text-ink-muted">{index + 1}</span>
-                {champion.champion}
+            <tr
+              key={champion.champion}
+              className="border-b border-white/5"
+            >
+              <td
+                className="asset-bg-name-cell py-2 font-body"
+                style={championRowBackgroundStyle(champion.champion)}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="w-5 text-ink-muted">{index + 1}</span>
+                  <span>{champion.champion}</span>
+                </span>
               </td>
               <td className={`py-2 text-right ${accentClass}`}>
                 {formatValue(champion, statKey)}
@@ -124,6 +133,9 @@ export default async function ChampionsPage({
             in draft or on the Rift.
           </p>
         </div>
+        <p className="font-stat text-xs text-ink-muted">
+          Scope: {currentSplit}
+        </p>
       </section>
 
       <section className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -147,9 +159,11 @@ export default async function ChampionsPage({
         </div>
         <div className="border-l border-white/10 pl-4">
           <p className="text-xs uppercase text-ink-muted">Draft pool</p>
-          <p className="mt-2 font-stat text-2xl tabular-nums text-ink">
-            {champions.length}
-          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <p className="font-stat text-2xl tabular-nums text-ink">
+              {champions.length}
+            </p>
+          </div>
           <p className="mt-1 text-xs text-ink-muted">
             Picked or banned champions.
           </p>
@@ -220,10 +234,18 @@ export default async function ChampionsPage({
             </thead>
             <tbody className="font-stat tabular-nums">
               {champions.map((champion, index) => (
-                <tr key={champion.champion} className="border-b border-white/5">
-                  <td className="py-2 font-body">
-                    <span className="mr-2 text-ink-muted">{index + 1}</span>
-                    {champion.champion}
+                <tr
+                  key={champion.champion}
+                  className="border-b border-white/5"
+                >
+                  <td
+                    className="asset-bg-name-cell py-2 font-body"
+                    style={championRowBackgroundStyle(champion.champion)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-5 text-ink-muted">{index + 1}</span>
+                      <span>{champion.champion}</span>
+                    </span>
                   </td>
                   <td className="py-2 font-body text-ink-muted">
                     {champion.roles}
