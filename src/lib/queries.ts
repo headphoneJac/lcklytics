@@ -19,6 +19,7 @@ import type {
   TeamSideProfile,
   TeamSideWinRate,
   TeamStanding,
+  TeamProgressPoint,
 } from './types'
 
 export const DEFAULT_SPLIT_KEY = '__all__'
@@ -1844,6 +1845,120 @@ function buildTeamSideProfiles(
     })
 }
 
+function buildTeamProgressPoints(series: InternalSeries[]): TeamProgressPoint[] {
+  type TeamProgressAccumulator = {
+    matchWins: number
+    matchLosses: number
+    gameWins: number
+    gameLosses: number
+  }
+
+  const teams = Array.from(
+    new Set(
+      series.flatMap((match) => [
+        displayTeamName(match.teamA),
+        displayTeamName(match.teamB),
+      ]),
+    ),
+  )
+
+  const records = new Map<string, TeamProgressAccumulator>()
+  const points: TeamProgressPoint[] = []
+
+  function getRecord(team: string) {
+    return (
+      records.get(team) ??
+      ({
+        matchWins: 0,
+        matchLosses: 0,
+        gameWins: 0,
+        gameLosses: 0,
+      } satisfies TeamProgressAccumulator)
+    )
+  }
+
+  function sortTeamPlacements(teamA: string, teamB: string) {
+    const recordA = getRecord(teamA)
+    const recordB = getRecord(teamB)
+    const gameDiffA = recordA.gameWins - recordA.gameLosses
+    const gameDiffB = recordB.gameWins - recordB.gameLosses
+
+    if (recordB.matchWins !== recordA.matchWins) {
+      return recordB.matchWins - recordA.matchWins
+    }
+    if (recordA.matchLosses !== recordB.matchLosses) {
+      return recordA.matchLosses - recordB.matchLosses
+    }
+    if (gameDiffB !== gameDiffA) return gameDiffB - gameDiffA
+    if (recordB.gameWins !== recordA.gameWins) {
+      return recordB.gameWins - recordA.gameWins
+    }
+    if (recordA.gameLosses !== recordB.gameLosses) {
+      return recordA.gameLosses - recordB.gameLosses
+    }
+
+    return teamA.localeCompare(teamB)
+  }
+
+  for (const match of series) {
+    const entries = [
+      {
+        team: displayTeamName(match.teamA),
+        matchWon: match.scoreA > match.scoreB,
+        gameWins: match.scoreA,
+        gameLosses: match.scoreB,
+      },
+      {
+        team: displayTeamName(match.teamB),
+        matchWon: match.scoreB > match.scoreA,
+        gameWins: match.scoreB,
+        gameLosses: match.scoreA,
+      },
+    ]
+
+    for (const entry of entries) {
+      const record = getRecord(entry.team)
+
+      record.matchWins += entry.matchWon ? 1 : 0
+      record.matchLosses += entry.matchWon ? 0 : 1
+      record.gameWins += entry.gameWins
+      record.gameLosses += entry.gameLosses
+      records.set(entry.team, record)
+    }
+
+    const placements = new Map(
+      [...teams]
+        .sort(sortTeamPlacements)
+        .map((team, index) => [team, index + 1]),
+    )
+
+    points.push({
+      date: match.date,
+      match_index: points.length + 1,
+      values: Object.fromEntries(
+        teams.map((team) => [team, placements.get(team) ?? teams.length]),
+      ),
+      records: Object.fromEntries(
+        teams.map((team) => {
+          const record = getRecord(team)
+
+          return [
+            team,
+            {
+              match_wins: record.matchWins,
+              match_losses: record.matchLosses,
+              game_wins: record.gameWins,
+              game_losses: record.gameLosses,
+            },
+          ]
+        }),
+      ),
+    })
+  }
+
+  return points
+}
+
 async function getTeamSideProfilesFromLckGames(filters: {
   split?: string
   playoffs?: boolean
@@ -1914,6 +2029,63 @@ export async function getTeamPageSideProfiles(
       })
     default:
       return getTeamSideProfiles(splitKey)
+  }
+}
+
+export async function getTeamProgression(
+  splitKey = DEFAULT_SPLIT_KEY,
+): Promise<TeamProgressPoint[]> {
+  switch (splitKey) {
+    case DEFAULT_SPLIT_KEY: {
+      const games = await getLckGames({})
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
+    case 'Cup': {
+      const games = await getLckGamesBySplit('Cup')
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      const cup = splitCupSeries(buildSeries(games, sides))
+      return buildTeamProgressPoints(cup.group)
+    }
+    case TEAMS_CUP_POSTSEASON_SPLIT_KEY: {
+      const games = await getLckGamesBySplit('Cup')
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      const cup = splitCupSeries(buildSeries(games, sides))
+      return buildTeamProgressPoints([...cup.playIn, ...cup.playoffs])
+    }
+    case 'Rounds 1-2': {
+      const games = await getLckGamesBySplit('Rounds 1-2', false)
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
+    case TEAMS_ROAD_TO_MSI_SPLIT_KEY: {
+      const games = await getLckGamesBySplit('Rounds 1-2', true)
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
+    case 'Rounds 3-4': {
+      const games = await getLckGamesBySplit('Rounds 3-4', false)
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
+    case TEAMS_SEASON_POSTSEASON_SPLIT_KEY: {
+      const games = await getLckGamesBySplit('Rounds 3-4', true)
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
+    default: {
+      const gameIds = await getDashboardGameIdsForSplitScope(splitKey)
+      const gameRows = await fetchRowsByGameIds<RawHomeGame>(
+        'games',
+        'game_id, split, playoffs, game_date, game_number',
+        gameIds,
+        ['game_date', 'game_number'],
+      )
+      const gameIdSet = new Set(gameIds)
+      const games = gameRows.filter((game) => gameIdSet.has(game.game_id))
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
   }
 }
 

@@ -33,6 +33,21 @@ export interface TeamSideProfile extends TeamStanding {
   second_pick_win_rate_pct: number
 }
 
+export interface TeamProgressPoint {
+  date: string
+  match_index: number
+  values: Record<string, number>
+  records: Record<
+    string,
+    {
+      match_wins: number
+      match_losses: number
+      game_wins: number
+      game_losses: number
+    }
+  >
+}
+
 export interface DashboardSplitOption {
   split_key: string
   split_label: string

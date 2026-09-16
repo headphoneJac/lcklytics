@@ -62,10 +62,7 @@ function StandingsTable({
           <tbody className="font-stat tabular-nums">
             {standings.map((team, index) => {
               return (
-                <tr
-                  key={team.team}
-                  className="border-b border-white/5"
-                >
+                <tr key={team.team} className="border-b border-white/5">
                   <td
                     className="asset-bg-name-cell py-2 font-body"
                     style={teamRowBackgroundStyle(team.team, assets)}
@@ -214,7 +211,7 @@ function bracketLayoutRows(rounds: BracketRound[]) {
     "2-2-1": [[0, 1], [0, 1], [0.5]],
     "3-3-1-2-1": [[0.5, 1.5, 3], [0, 1, 2.5], [2], [0.5, 1.5], [1]],
     "1-1-2-1": [[1.5], [1.25], [0, 1], [0.5]],
-    "2-1": [[0, 2], [1]],
+    "2-1": [[0, 1], [0.5]],
   };
 
   const preset = presets[countKey];
