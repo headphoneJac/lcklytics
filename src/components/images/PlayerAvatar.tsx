@@ -9,11 +9,15 @@ export default function PlayerAvatar({
   player,
   team,
   className = "size-10 rounded-full",
+  sizes = "48px",
+  loading,
 }: {
   player: string;
   team?: string | null;
   assets?: EsportsAssets;
   className?: string;
+  sizes?: string;
+  loading?: "eager" | "lazy";
 }) {
   const [src, ...fallbackSrcs] = leaguepediaPlayerAvatarUrls(player, team);
 
@@ -26,7 +30,8 @@ export default function PlayerAvatar({
       className={className}
       imageClassName="object-cover"
       fallbackClassName="rounded-full border border-white/10 text-xs"
-      sizes="48px"
+      sizes={sizes}
+      loading={loading}
     />
   );
 }

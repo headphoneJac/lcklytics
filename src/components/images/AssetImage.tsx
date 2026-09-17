@@ -13,6 +13,7 @@ type AssetImageProps = {
   imageClassName?: string
   fallbackClassName?: string
   sizes?: string
+  loading?: "eager" | "lazy"
 }
 
 export default function AssetImage({
@@ -25,6 +26,7 @@ export default function AssetImage({
   imageClassName = "object-cover",
   fallbackClassName = "",
   sizes = "32px",
+  loading,
 }: AssetImageProps) {
   const [failedSrcs, setFailedSrcs] = useState<string[]>([])
   const sources = [src, fallbackSrc, ...fallbackSrcs].filter(
@@ -51,10 +53,12 @@ export default function AssetImage({
         alt={alt}
         fill
         sizes={sizes}
+        loading={loading}
         className={imageClassName}
         unoptimized={
           activeSrc.includes('/Special:Redirect/file/') ||
-          activeSrc.includes('/Special:FilePath/')
+          activeSrc.includes('/Special:FilePath/') ||
+          activeSrc.includes('static.wikia.nocookie.net')
         }
         onError={() =>
           setFailedSrcs((current) =>

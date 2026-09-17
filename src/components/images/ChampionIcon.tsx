@@ -4,9 +4,13 @@ import { championIconUrl, initials } from "@/lib/assets"
 export default function ChampionIcon({
   champion,
   className = "size-8 rounded",
+  sizes = "40px",
+  loading,
 }: {
   champion: string
   className?: string
+  sizes?: string
+  loading?: "eager" | "lazy"
 }) {
   return (
     <AssetImage
@@ -16,7 +20,8 @@ export default function ChampionIcon({
       className={className}
       imageClassName="object-cover"
       fallbackClassName="text-xs"
-      sizes="40px"
+      sizes={sizes}
+      loading={loading}
     />
   )
 }

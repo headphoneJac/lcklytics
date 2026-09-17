@@ -5,10 +5,14 @@ export default function TeamLogo({
   team,
   assets,
   className = "size-8 rounded",
+  sizes = "48px",
+  loading,
 }: {
   team: string
   assets?: EsportsAssets
   className?: string
+  sizes?: string
+  loading?: "eager" | "lazy"
 }) {
   const asset = getTeamAsset(assets, team)
 
@@ -20,7 +24,8 @@ export default function TeamLogo({
       className={className}
       imageClassName="object-contain p-1"
       fallbackClassName="border border-white/10 px-1 text-[10px]"
-      sizes="48px"
+      sizes={sizes}
+      loading={loading}
     />
   )
 }

@@ -191,100 +191,152 @@ function NewspaperInsights({
   const champion = championInsight.champion;
 
   return (
-    <section className="border-y border-white/20 py-6">
-      <div className="flex items-center justify-between gap-4 border-b-4 border-double border-white/20 pb-3 font-stat text-xs uppercase tracking-[0.18em] text-ink-muted">
-        <span>{currentSplit}</span>
-        <span className="text-gold">*</span>
-        <span>LCK Analysis Desk</span>
-      </div>
-
-      <h2 className="border-b-4 border-double border-white/20 py-5 text-center font-display text-5xl font-bold leading-none tracking-tight text-ink md:text-7xl">
-        Analysis Brief
-      </h2>
-
-      <div className="grid grid-cols-1 gap-6 border-b border-white/15 py-6 lg:grid-cols-[1.35fr_0.9fr]">
-        <article className="border border-white/15 bg-background/30 p-5">
-          <p className="font-stat text-xs uppercase tracking-[0.18em] text-ink-muted">
-            Team Lead
+    <section className="border-y border-white/15 py-6">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-5 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="font-stat text-xs uppercase tracking-[0.22em] text-ink-muted">
+            Insight Snapshot
           </p>
-          <h3 className="mt-3 font-display text-3xl font-bold leading-8 text-ink">
-            {teamInsight.title}
-          </h3>
-          <p className="mt-4 text-sm font-semibold leading-7 text-ink">
-            {teamInsight.body}
-          </p>
-          <p className="mt-5 font-stat text-3xl tabular-nums text-gold">
-            {teamInsight.metric}
-          </p>
-          <div className="mt-2 text-xs text-ink-muted">
-            <TeamInsightMeta team={team} />
-          </div>
-        </article>
-
-        <div className="flex min-h-72 items-center justify-center border border-white/15 bg-surface/55 p-6">
-          <div className="flex flex-col items-center gap-4">
-            <TeamLogo
-              team={team?.team ?? "TBD"}
-              assets={assets}
-              className="size-44 rounded"
-            />
-          </div>
+          <h2 className="mt-2 font-display text-4xl font-bold leading-none tracking-tight text-ink md:text-5xl">
+            What The Numbers Are Saying
+          </h2>
         </div>
-      </div>
-
-      <div className="border-b-4 border-double border-white/20 py-4 text-center">
-        <p className="font-display text-3xl font-bold uppercase tracking-wide text-ink md:text-4xl">
-          * {playerInsight.title} *
+        <p className="font-stat text-xs text-ink-muted">
+          Scope: {currentSplit}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 pt-6 lg:grid-cols-[0.65fr_1.35fr]">
-        <article className="border border-white/15 bg-surface/45 p-5">
-          <div className="flex justify-center">
+      <div className="mt-5 flex flex-col gap-5">
+        <article className="relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-24 -right-14 z-0 opacity-[0.07] blur-[1px]"
+          >
+            <TeamLogo
+              team={team?.team ?? "TBD"}
+              assets={assets}
+              className="size-80 rounded"
+              sizes="320px"
+              loading="eager"
+            />
+          </div>
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+            <div>
+              <p className="font-stat text-xs uppercase tracking-[0.2em] text-gold">
+                Team Signal
+              </p>
+              <h3 className="mt-3 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
+                {teamInsight.title}
+              </h3>
+              <p className="mt-4 max-w-4xl text-sm font-semibold leading-7 text-ink">
+                {teamInsight.body}
+              </p>
+            </div>
+            <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <div className="flex items-center gap-4 lg:justify-end">
+                <div className="lg:text-right">
+                  <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+                    Win Rate
+                  </p>
+                  <p className="mt-1 font-stat text-5xl tabular-nums text-gold">
+                    {teamInsight.metric}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 text-xs text-ink-muted lg:text-right">
+                <TeamInsightMeta team={team} />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article className="relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-20 right-4 z-0 opacity-[0.08] blur-[1px] md:right-12"
+          >
             <PlayerAvatar
               player={player?.player ?? "TBD"}
               team={player?.team}
-              className="size-40 rounded"
+              className="size-72 rounded"
+              sizes="288px"
             />
           </div>
-          <p className="mt-4 text-center font-display text-3xl font-bold text-ink">
-            {player?.player ?? "TBD"}
-          </p>
-          <p className="mt-2 text-center font-stat text-2xl tabular-nums text-green">
-            {playerInsight.metric}
-          </p>
-          <div className="mt-3 flex justify-center text-xs text-ink-muted">
-            <PlayerInsightMeta player={player} assets={assets} />
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-center">
+            <div className="flex items-center gap-4 lg:block">
+              <div className="min-w-0 lg:mt-4">
+                <p className="font-stat text-xs uppercase tracking-[0.2em] text-green">
+                  Player Form
+                </p>
+                <p className="mt-2 truncate font-display text-3xl font-bold text-ink">
+                  {player?.player ?? "TBD"}
+                </p>
+                <div className="mt-2 text-xs text-ink-muted">
+                  <PlayerInsightMeta player={player} assets={assets} />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <p className="font-stat text-xs uppercase tracking-[0.2em] text-ink-muted">
+                Featured Read
+              </p>
+              <h3 className="mt-2 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
+                {playerInsight.title}
+              </h3>
+              <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <p className="max-w-3xl text-sm leading-7 text-ink-muted">
+                  {playerInsight.body}
+                </p>
+                <div className="shrink-0 md:text-right">
+                  <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+                    KDA
+                  </p>
+                  <p className="mt-1 font-stat text-5xl tabular-nums text-green">
+                    {playerInsight.metric}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="mt-4 text-sm leading-6 text-ink-muted">
-            {playerInsight.body}
-          </p>
         </article>
 
-        <article className="border border-white/15 bg-background/30">
-          <div className="flex items-center justify-between gap-4 border-b border-white/15 bg-surface/70 px-5 py-4">
-            <div>
-              <p className="font-stat text-xs uppercase tracking-[0.18em] text-ink-muted">
-                Draft Lead
-              </p>
-              <h3 className="mt-1 font-display text-3xl font-bold leading-8 text-ink">
-                {championInsight.title}
-              </h3>
-            </div>
+        <article className="relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-28 -right-10 z-0 opacity-[0.08] blur-[1px]"
+          >
             <ChampionIcon
               champion={champion?.champion ?? "Aatrox"}
-              className="size-20 rounded"
+              className="size-80 rounded"
+              sizes="320px"
             />
           </div>
-          <div className="p-6">
-            <p className="text-sm font-semibold leading-7 text-ink">
-              {championInsight.body}
-            </p>
-            <p className="mt-5 font-stat text-3xl tabular-nums text-red-side">
-              {championInsight.metric}
-            </p>
-            <div className="mt-2 text-xs text-ink-muted">
-              <ChampionInsightMeta champion={champion} />
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+            <div>
+              <p className="font-stat text-xs uppercase tracking-[0.2em] text-red-side">
+                Draft Pressure
+              </p>
+              <h3 className="mt-3 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
+                {championInsight.title}
+              </h3>
+              <p className="mt-4 max-w-4xl text-sm font-semibold leading-7 text-ink">
+                {championInsight.body}
+              </p>
+            </div>
+            <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <div className="flex items-center gap-4 lg:justify-end">
+                <div className="lg:text-right">
+                  <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+                    Presence
+                  </p>
+                  <p className="mt-1 font-stat text-5xl tabular-nums text-red-side">
+                    {championInsight.metric}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 text-xs text-ink-muted lg:text-right">
+                <ChampionInsightMeta champion={champion} />
+              </div>
             </div>
           </div>
         </article>
