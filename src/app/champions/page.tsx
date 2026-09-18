@@ -69,22 +69,20 @@ function Leaderboard({
       <table className="mt-4 w-full text-sm">
         <thead>
           <tr className="border-b border-white/10 text-left text-ink-muted">
+            <th></th>
             <th className="py-2 font-normal">Champion</th>
             <th className="py-2 text-right font-normal">Value</th>
           </tr>
         </thead>
         <tbody className="font-stat tabular-nums">
           {champions.map((champion, index) => (
-            <tr
-              key={champion.champion}
-              className="border-b border-white/5"
-            >
+            <tr key={champion.champion} className="border-b border-white/5">
+              <td className="w-5 text-ink-muted">{index + 1}</td>
               <td
                 className="asset-bg-name-cell py-2 font-body"
                 style={championRowBackgroundStyle(champion.champion)}
               >
                 <span className="flex items-center gap-2">
-                  <span className="w-5 text-ink-muted">{index + 1}</span>
                   <span>{champion.champion}</span>
                 </span>
               </td>
@@ -214,6 +212,7 @@ export default async function ChampionsPage({
           <table className="w-full min-w-[1160px] text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-ink-muted">
+                <th></th>
                 <th className="py-2 font-normal">Champion</th>
                 <th className="py-2 font-normal">Roles</th>
                 <th className="py-2 text-right font-normal">Picks</th>
@@ -234,16 +233,13 @@ export default async function ChampionsPage({
             </thead>
             <tbody className="font-stat tabular-nums">
               {champions.map((champion, index) => (
-                <tr
-                  key={champion.champion}
-                  className="border-b border-white/5"
-                >
+                <tr key={champion.champion} className="border-b border-white/5">
+                  <td className="w-5 text-ink-muted">{index + 1}</td>
                   <td
                     className="asset-bg-name-cell py-2 font-body"
                     style={championRowBackgroundStyle(champion.champion)}
                   >
                     <span className="flex items-center gap-2">
-                      <span className="w-5 text-ink-muted">{index + 1}</span>
                       <span>{champion.champion}</span>
                     </span>
                   </td>

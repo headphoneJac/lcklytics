@@ -434,6 +434,7 @@ export default async function TeamsPage({
           <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-ink-muted">
+                <th></th>
                 <th className="py-2 font-normal">Team</th>
                 <th className="py-2 text-right font-normal">Match</th>
                 <th className="py-2 text-right font-normal">Game</th>
@@ -448,14 +449,12 @@ export default async function TeamsPage({
             <tbody className="font-stat tabular-nums">
               {teams.map((team, index) => (
                 <tr key={team.team} className="border-b border-white/5">
+                  <td className="w-5 text-ink-muted">{index + 1}</td>
                   <td
                     className="asset-bg-name-cell py-2 font-body"
                     style={teamRowBackgroundStyle(team.team, esportsAssets)}
                   >
-                    <span className="flex items-center gap-2">
-                      <span className="w-5 text-ink-muted">{index + 1}</span>
-                      <span>{team.team}</span>
-                    </span>
+                    <span className="flex items-center gap-2">{team.team}</span>
                   </td>
                   <td className="py-2 text-right">
                     {team.match_wins}-{team.match_losses}

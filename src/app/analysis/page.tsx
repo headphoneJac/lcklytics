@@ -1,10 +1,10 @@
 import SplitSelector from "@/components/SplitSelector";
 import TeamProgressChart from "@/components/analysis/TeamProgressChart";
 import ChampionIcon from "@/components/images/ChampionIcon";
-import PlayerAvatar from "@/components/images/PlayerAvatar";
 import TeamLogo from "@/components/images/TeamLogo";
 import {
   championRowBackgroundStyle,
+  playerRowBackgroundStyle,
   teamRowBackgroundStyle,
 } from "@/components/images/row-background";
 import { getLckEsportsAssets } from "@/lib/esports-assets";
@@ -210,7 +210,7 @@ function NewspaperInsights({
         <article className="relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -bottom-24 -right-14 z-0 opacity-[0.07] blur-[1px]"
+            className="pointer-events-none absolute -bottom-24 -right-14 z-0 opacity-[0.07]"
           >
             <TeamLogo
               team={team?.team ?? "TBD"}
@@ -250,21 +250,17 @@ function NewspaperInsights({
           </div>
         </article>
 
-        <article className="relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -bottom-20 right-4 z-0 opacity-[0.08] blur-[1px] md:right-12"
-          >
-            <PlayerAvatar
-              player={player?.player ?? "TBD"}
-              team={player?.team}
-              className="size-72 rounded"
-              sizes="288px"
-            />
-          </div>
-          <div className="relative z-10 grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-center">
-            <div className="flex items-center gap-4 lg:block">
-              <div className="min-w-0 lg:mt-4">
+        <article
+          className="asset-bg-snapshot-player relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6"
+          style={
+            player
+              ? playerRowBackgroundStyle(player.player, player.team, assets)
+              : undefined
+          }
+        >
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-center">
+            <div className="flex min-h-36 flex-col justify-center border-b border-white/10 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+              <div className="min-w-0">
                 <p className="font-stat text-xs uppercase tracking-[0.2em] text-green">
                   Player Form
                 </p>
@@ -275,27 +271,25 @@ function NewspaperInsights({
                   <PlayerInsightMeta player={player} assets={assets} />
                 </div>
               </div>
+              <div className="mt-5">
+                <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+                  KDA
+                </p>
+                <p className="mt-1 font-stat text-5xl tabular-nums text-green">
+                  {playerInsight.metric}
+                </p>
+              </div>
             </div>
-            <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            <div>
               <p className="font-stat text-xs uppercase tracking-[0.2em] text-ink-muted">
                 Featured Read
               </p>
               <h3 className="mt-2 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
                 {playerInsight.title}
               </h3>
-              <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <p className="max-w-3xl text-sm leading-7 text-ink-muted">
-                  {playerInsight.body}
-                </p>
-                <div className="shrink-0 md:text-right">
-                  <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
-                    KDA
-                  </p>
-                  <p className="mt-1 font-stat text-5xl tabular-nums text-green">
-                    {playerInsight.metric}
-                  </p>
-                </div>
-              </div>
+              <p className="mt-5 max-w-4xl text-sm leading-7 text-ink-muted">
+                {playerInsight.body}
+              </p>
             </div>
           </div>
         </article>
@@ -303,7 +297,7 @@ function NewspaperInsights({
         <article className="relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -bottom-28 -right-10 z-0 opacity-[0.08] blur-[1px]"
+            className="pointer-events-none absolute -bottom-28 -right-10 z-0 opacity-[0.08]"
           >
             <ChampionIcon
               champion={champion?.champion ?? "Aatrox"}
@@ -568,6 +562,7 @@ function TeamFormPickOrderTable({
         <table className="w-full min-w-[1100px] text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left text-ink-muted">
+              <th></th>
               <th className="py-2 font-normal">Team</th>
               <th className="py-2 text-right font-normal">Match Record</th>
               <th className="py-2 text-right font-normal">Game Record</th>
@@ -583,14 +578,12 @@ function TeamFormPickOrderTable({
           <tbody className="font-stat tabular-nums">
             {teams.map((team, index) => (
               <tr key={team.team} className="border-b border-white/5">
+                <td className="w-5 text-ink-muted">{index + 1}</td>
                 <td
                   className="asset-bg-name-cell py-2 font-body"
                   style={teamRowBackgroundStyle(team.team, assets)}
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="w-5 text-ink-muted">{index + 1}</span>
-                    <span>{team.team}</span>
-                  </span>
+                  <span className="flex items-center gap-2">{team.team}</span>
                 </td>
                 <td className="py-2 text-right text-gold">
                   {formatMatchRecord(team)}
@@ -657,6 +650,7 @@ function RolePlayerBoards({
               <table className="w-full min-w-[500px] text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-left text-ink-muted">
+                    <th></th>
                     <th className="py-2 font-normal">Player</th>
                     <th className="py-2 font-normal">Team</th>
                     <th className="py-2 text-right font-normal">Games</th>
@@ -671,12 +665,10 @@ function RolePlayerBoards({
                       key={`${player.player_id}-${player.position}`}
                       className="border-b border-white/5"
                     >
+                      <td className="w-5 text-ink-muted">{index + 1}</td>
                       <td className="py-2 font-body">
                         <span className="flex items-center gap-2">
-                          <span className="w-5 text-ink-muted">
-                            {index + 1}
-                          </span>
-                          <span>{player.player}</span>
+                          {player.player}
                         </span>
                       </td>
                       <td
@@ -724,6 +716,7 @@ function ChampionPressureTable({
       <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="border-b border-white/10 text-left text-ink-muted">
+            <th></th>
             <th className="py-2 font-normal">Champion</th>
             <th className="py-2 font-normal">Roles</th>
             <th className="py-2 text-right font-normal">Presence</th>
@@ -736,13 +729,13 @@ function ChampionPressureTable({
         <tbody className="font-stat tabular-nums">
           {champions.map((champion, index) => (
             <tr key={champion.champion} className="border-b border-white/5">
+              <td className="w-5 text-ink-muted">{index + 1}</td>
               <td
                 className="asset-bg-name-cell py-2 font-body"
                 style={championRowBackgroundStyle(champion.champion)}
               >
                 <span className="flex items-center gap-2">
-                  <span className="w-5 text-ink-muted">{index + 1}</span>
-                  <span>{champion.champion}</span>
+                  {champion.champion}
                 </span>
               </td>
               <td className="py-2 font-body text-ink-muted">

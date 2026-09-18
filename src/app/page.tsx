@@ -54,6 +54,7 @@ function StandingsTable({
         <table className="w-full min-w-[480px] text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left text-ink-muted">
+              <th></th>
               <th className="py-2 font-normal">Team</th>
               <th className="py-2 text-right font-normal">Series</th>
               <th className="py-2 text-right font-normal">Games</th>
@@ -63,14 +64,12 @@ function StandingsTable({
             {standings.map((team, index) => {
               return (
                 <tr key={team.team} className="border-b border-white/5">
+                  <td className="w-5 text-ink-muted">{index + 1}</td>
                   <td
                     className="asset-bg-name-cell py-2 font-body"
                     style={teamRowBackgroundStyle(team.team, assets)}
                   >
-                    <span className="flex items-center gap-2">
-                      <span className="w-5 text-ink-muted">{index + 1}</span>
-                      <span>{team.team}</span>
-                    </span>
+                    <span className="flex items-center gap-2">{team.team}</span>
                   </td>
                   <td className="py-2 text-right text-gold">
                     {record(team.match_wins, team.match_losses)}
