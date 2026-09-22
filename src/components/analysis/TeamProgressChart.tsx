@@ -140,10 +140,11 @@ export default function TeamProgressChart({
               matchIndex === 1 || matchIndex % matchOrderTickStep === 0,
           )
       : undefined;
+  const chartHeight = teams.length >= 10 ? 480 : teams.length <= 5 ? 240 : 420;
 
   return (
     <div className="rounded-lg border border-white/10 bg-surface/40 p-4">
-      <div className="h-[420px]">
+      <div style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={points}
@@ -203,7 +204,7 @@ export default function TeamProgressChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+      <div className="mt-4 flex flex-wrap justify-end gap-x-4 gap-y-2">
         {teams.map((team, index) => (
           <span
             key={team}

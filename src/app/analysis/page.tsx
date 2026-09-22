@@ -29,6 +29,7 @@ import type {
   ChampionProfile,
   PlayerRole,
   PlayerRoleProfile,
+  TeamProgressPoint,
   TeamSideProfile,
 } from "@/lib/types";
 
@@ -43,6 +44,23 @@ const ROLE_LABELS: Record<PlayerRole, string> = {
 const ROLE_ORDER: PlayerRole[] = ["top", "jng", "mid", "bot", "sup"];
 const DEFAULT_MIN_LEADERBOARD_GAMES = 10;
 const COMPACT_MIN_LEADERBOARD_GAMES = 5;
+const ROUNDS_3_4_SPLIT_KEY = "Rounds 3-4";
+const ROUNDS_3_4_GROUPS = [
+  {
+    name: "Legend Group",
+    teams: ["Dplus Kia", "Gen.G", "Hanwha Life Esports", "T1", "KT Rolster"],
+  },
+  {
+    name: "Rise Group",
+    teams: [
+      "HANJIN BRION",
+      "NS Redforce",
+      "BNK FearX",
+      "Kiwoom DRX",
+      "DN SOOPers",
+    ],
+  },
+] as const;
 const HIDE_PLACEMENT_CHART_SPLITS = new Set([
   TEAMS_CUP_POSTSEASON_SPLIT_KEY,
   TEAMS_ROAD_TO_MSI_SPLIT_KEY,
@@ -258,7 +276,7 @@ function NewspaperInsights({
               : undefined
           }
         >
-          <div className="relative z-10 grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-center">
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[var(--snapshot-player-panel-width)_minmax(0,1fr)] lg:items-center">
             <div className="flex min-h-36 flex-col justify-center border-b border-white/10 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
               <div className="min-w-0">
                 <p className="font-stat text-xs uppercase tracking-[0.2em] text-green">
@@ -447,20 +465,44 @@ function impactRead(primary: AggregateWinRate, secondary: AggregateWinRate) {
   return `${leader.label} is ahead by ${formatDelta(Math.abs(delta))}.`;
 }
 
-function WinRateBar({ profile }: { profile: AggregateWinRate }) {
+function WinShareComparisonBar({
+  primary,
+  secondary,
+}: {
+  primary: AggregateWinRate;
+  secondary: AggregateWinRate;
+}) {
+  const totalWins = primary.wins + secondary.wins;
+  const primaryShare = totalWins > 0 ? (primary.wins / totalWins) * 100 : 50;
+  const secondaryShare =
+    totalWins > 0 ? (secondary.wins / totalWins) * 100 : 50;
+
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="text-ink-muted">{profile.label}</span>
-        <span className={`font-stat tabular-nums ${profile.textClass}`}>
-          {formatRecord(profile.wins, profile.games)} /{" "}
-          {formatPct(profile.rate)}
-        </span>
+      <div className="flex items-start justify-between gap-4 text-xs">
+        <div>
+          <p className="text-ink-muted">{primary.label}</p>
+          <p className={`mt-1 font-stat tabular-nums ${primary.textClass}`}>
+            {primary.wins} wins / {formatPct(primary.rate)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-ink-muted">{secondary.label}</p>
+          <p className={`mt-1 font-stat tabular-nums ${secondary.textClass}`}>
+            {secondary.wins} wins / {formatPct(secondary.rate)}
+          </p>
+        </div>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/10">
         <div
-          className={`h-full rounded-full ${profile.barClass}`}
-          style={{ width: `${Math.min(Math.max(profile.rate, 0), 100)}%` }}
+          className={`h-full ${primary.barClass}`}
+          style={{ width: `${primaryShare}%` }}
+          title={`${primary.label}: ${primary.wins} wins`}
+        />
+        <div
+          className={`h-full ${secondary.barClass}`}
+          style={{ width: `${secondaryShare}%` }}
+          title={`${secondary.label}: ${secondary.wins} wins`}
         />
       </div>
     </div>
@@ -491,9 +533,8 @@ function AggregateImpactCard({
           {impactRead(primary, secondary)}
         </p>
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <WinRateBar profile={primary} />
-        <WinRateBar profile={secondary} />
+      <div className="mt-4">
+        <WinShareComparisonBar primary={primary} secondary={secondary} />
       </div>
     </article>
   );
@@ -547,6 +588,69 @@ function sortTeamsByMatchRecord(teams: TeamSideProfile[]) {
 
     return a.team.localeCompare(b.team);
   });
+}
+
+function compareProgressRecords(
+  teamA: string,
+  teamB: string,
+  records: TeamProgressPoint["records"],
+) {
+  const recordA = records[teamA];
+  const recordB = records[teamB];
+
+  if (!recordA && !recordB) return teamA.localeCompare(teamB);
+  if (!recordA) return 1;
+  if (!recordB) return -1;
+
+  const gameDiffA = recordA.game_wins - recordA.game_losses;
+  const gameDiffB = recordB.game_wins - recordB.game_losses;
+
+  if (recordB.match_wins !== recordA.match_wins) {
+    return recordB.match_wins - recordA.match_wins;
+  }
+  if (recordA.match_losses !== recordB.match_losses) {
+    return recordA.match_losses - recordB.match_losses;
+  }
+  if (gameDiffB !== gameDiffA) return gameDiffB - gameDiffA;
+  if (recordB.game_wins !== recordA.game_wins) {
+    return recordB.game_wins - recordA.game_wins;
+  }
+  if (recordA.game_losses !== recordB.game_losses) {
+    return recordA.game_losses - recordB.game_losses;
+  }
+
+  return teamA.localeCompare(teamB);
+}
+
+function buildGroupedProgressionPoints(
+  points: TeamProgressPoint[],
+  teamNames: string[],
+) {
+  return points
+    .map((point) => {
+      const teamsInPoint = teamNames.filter((team) => point.records[team]);
+      const placements = new Map(
+        [...teamsInPoint]
+          .sort((teamA, teamB) =>
+            compareProgressRecords(teamA, teamB, point.records),
+          )
+          .map((team, index) => [team, index + 1]),
+      );
+
+      return {
+        ...point,
+        values: Object.fromEntries(
+          teamsInPoint.map((team) => [
+            team,
+            placements.get(team) ?? teamsInPoint.length,
+          ]),
+        ),
+        records: Object.fromEntries(
+          teamsInPoint.map((team) => [team, point.records[team]!]),
+        ),
+      };
+    })
+    .filter((point) => Object.keys(point.values).length > 0);
 }
 
 function TeamFormPickOrderTable({
@@ -933,6 +1037,27 @@ export default async function AnalysisPage({
     if (indexB !== -1) return 1;
     return a.localeCompare(b);
   });
+  const teamGroupSections =
+    splitKey === ROUNDS_3_4_SPLIT_KEY
+      ? ROUNDS_3_4_GROUPS.map((group) => {
+          const groupTeamNames = new Set<string>(group.teams);
+          const groupTeams = sortTeamsByMatchRecord(
+            teams.filter((team) => groupTeamNames.has(team.team)),
+          );
+          const groupProgressionTeams = groupTeams.map((team) => team.team);
+
+          return {
+            name: group.name,
+            teams: groupTeams,
+            progressionTeams: groupProgressionTeams,
+            progression: buildGroupedProgressionPoints(
+              teamProgression,
+              groupProgressionTeams,
+            ),
+          };
+        }).filter((group) => group.teams.length > 0)
+      : [];
+  const hasTeamGroupSections = teamGroupSections.length > 0;
   const rolePlayerGroups = ROLE_ORDER.map((role) => ({
     role,
     players: topBy(
@@ -971,7 +1096,9 @@ export default async function AnalysisPage({
   );
   const showPlacementChart = !HIDE_PLACEMENT_CHART_SPLITS.has(splitKey);
   const placementChartTickStep =
-    splitKey === "Rounds 1-2" || splitKey === "Rounds 3-4" ? 10 : undefined;
+    splitKey === "Rounds 1-2" || splitKey === ROUNDS_3_4_SPLIT_KEY
+      ? 10
+      : undefined;
 
   return (
     <div className="flex flex-col gap-10">
@@ -1108,13 +1235,34 @@ export default async function AnalysisPage({
             accentClass="text-silver"
           />
         </div>
-        <TeamFormPickOrderTable
-          teams={matchOrderedTeams}
-          assets={esportsAssets}
-        />
+        {hasTeamGroupSections ? (
+          <div className="flex flex-col gap-8">
+            {teamGroupSections.map((group) => (
+              <div key={group.name} className="flex flex-col gap-5">
+                <h3 className="font-display text-2xl font-bold tracking-tight text-ink">
+                  {group.name}
+                </h3>
+                <TeamFormPickOrderTable
+                  teams={group.teams}
+                  assets={esportsAssets}
+                />
+                <TeamProgressChart
+                  points={group.progression}
+                  teams={group.progressionTeams}
+                  matchOrderTickStep={placementChartTickStep}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <TeamFormPickOrderTable
+            teams={matchOrderedTeams}
+            assets={esportsAssets}
+          />
+        )}
       </section>
 
-      {showPlacementChart ? (
+      {showPlacementChart && !hasTeamGroupSections ? (
         <section className="flex flex-col gap-5">
           <SectionHeader
             eyebrow="Teams"
