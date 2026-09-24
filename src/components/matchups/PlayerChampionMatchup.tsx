@@ -10,10 +10,14 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import type { PlayerChampionMatchupProfile, PlayerRole } from "@/lib/types";
+import type {
+  PlayerChampionMatchupProfile,
+  PlayerRole,
+  PlayerRoleProfile,
+  TeamObjectiveStat,
+} from "@/lib/types";
 import ChampionIcon from "@/components/images/ChampionIcon";
-import PlayerAvatar from "@/components/images/PlayerAvatar";
-import TeamLogo from "@/components/images/TeamLogo";
+import { playerRowBackgroundStyle } from "@/components/images/row-background";
 import type { EsportsAssets } from "@/lib/assets";
 
 const ROLE_LABELS: Record<PlayerRole, string> = {
@@ -44,6 +48,15 @@ type PlayerMatchupSummary = {
   avg_damage_share: number;
   avg_cspm: number;
   avg_vision_score: number;
+  avg_wards_placed: number;
+  avg_wards_killed: number;
+  avg_control_wards_bought: number;
+  avg_grubs: number;
+  avg_heralds: number;
+  avg_dragons: number;
+  avg_barons: number;
+  avg_turrets_destroyed: number;
+  has_objective_stats: boolean;
   avg_gd15: number;
   avg_xpd15: number;
   avg_csd15: number;
@@ -108,11 +121,6 @@ const STAT_SECTIONS: {
         key: "avg_cspm",
         format: (value) => value.toFixed(1),
       },
-      {
-        label: "Vision Score",
-        key: "avg_vision_score",
-        format: (value) => value.toFixed(1),
-      },
     ],
   },
   {
@@ -121,11 +129,6 @@ const STAT_SECTIONS: {
       {
         label: "First Blood %",
         key: "first_blood_pct",
-        format: (value) => `${value.toFixed(1)}%`,
-      },
-      {
-        label: "First Tower %",
-        key: "first_tower_pct",
         format: (value) => `${value.toFixed(1)}%`,
       },
       {
@@ -145,7 +148,63 @@ const STAT_SECTIONS: {
       },
     ],
   },
+  {
+    title: "Vision",
+    metrics: [
+      {
+        label: "Vision Score",
+        key: "avg_vision_score",
+        format: (value) => value.toFixed(1),
+      },
+      {
+        label: "Wards Placed",
+        key: "avg_wards_placed",
+        format: (value) => value.toFixed(1),
+      },
+      {
+        label: "Wards Cleared",
+        key: "avg_wards_killed",
+        format: (value) => value.toFixed(1),
+      },
+      {
+        label: "Control Wards",
+        key: "avg_control_wards_bought",
+        format: (value) => value.toFixed(1),
+      },
+    ],
+  },
 ];
+
+const OBJECTIVE_SECTION: (typeof STAT_SECTIONS)[number] = {
+  title: "Objectives",
+  metrics: [
+    {
+      label: "Grubs",
+      key: "avg_grubs",
+      format: (value) => value.toFixed(1),
+    },
+    {
+      label: "Heralds",
+      key: "avg_heralds",
+      format: (value) => value.toFixed(1),
+    },
+    {
+      label: "Dragons",
+      key: "avg_dragons",
+      format: (value) => value.toFixed(1),
+    },
+    {
+      label: "Barons",
+      key: "avg_barons",
+      format: (value) => value.toFixed(1),
+    },
+    {
+      label: "Turrets Destroyed",
+      key: "avg_turrets_destroyed",
+      format: (value) => value.toFixed(1),
+    },
+  ],
+};
 
 type Winner = "left" | "right" | "tie";
 
@@ -382,6 +441,15 @@ function summarizePlayer(
     avg_damage_share: weighted("avg_damage_share"),
     avg_cspm: weighted("avg_cspm"),
     avg_vision_score: weighted("avg_vision_score"),
+    avg_wards_placed: 0,
+    avg_wards_killed: 0,
+    avg_control_wards_bought: 0,
+    avg_grubs: 0,
+    avg_heralds: 0,
+    avg_dragons: 0,
+    avg_barons: 0,
+    avg_turrets_destroyed: 0,
+    has_objective_stats: false,
     avg_gd15: Math.round(weighted("avg_gd15")),
     avg_xpd15: Math.round(weighted("avg_xpd15")),
     avg_csd15: weighted("avg_csd15"),
@@ -407,6 +475,7 @@ function PlayerHeader({
   playerOptions,
   assets,
   onPlayerChange,
+  onClear,
 }: {
   side: "left" | "right";
   selected?: PlayerMatchupSummary;
@@ -414,65 +483,81 @@ function PlayerHeader({
   playerOptions: PlayerOption[];
   assets?: EsportsAssets;
   onPlayerChange: (value: string) => void;
+  onClear: () => void;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-lg border border-white/10 bg-surface/80 p-4">
+    <div
+      className={`asset-bg-matchup-player relative isolate overflow-hidden rounded-lg border border-white/10 bg-surface/80 p-4 ${
+        side === "right" ? "asset-bg-matchup-player-right" : ""
+      }`}
+      style={
+        selected
+          ? playerRowBackgroundStyle(selected.player, selected.team, assets)
+          : undefined
+      }
+    >
       <div
-        className={`absolute inset-y-0 w-24 opacity-20 ${
+        className={`absolute inset-y-0 w-28 opacity-25 ${
           side === "left" ? "right-0 bg-blue-side" : "left-0 bg-red-side"
         }`}
       />
-      <div className="relative flex items-center gap-4">
-        <PlayerAvatar
-          player={selected?.player ?? "?"}
-          team={selected?.team}
-          assets={assets}
-          className="size-16 rounded"
-        />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate font-display text-2xl font-bold tracking-tight text-ink">
-            {selected?.player ?? "Select player"}
-          </h2>
-          <p className="flex items-center gap-1.5 text-xs text-ink-muted">
-            {selected ? (
-              <TeamLogo
-                team={selected.team}
-                assets={assets}
-                className="size-5 rounded-sm"
-              />
-            ) : null}
-            {selected
-              ? `${selected.team} / ${ROLE_LABELS[selected.position]}`
-              : "Choose a player"}
-          </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="font-stat text-2xl tabular-nums text-gold">
-            {selected?.performance_score.toFixed(1) ?? "0.0"}
-          </p>
-          <p className="text-xs text-ink-muted">score</p>
-        </div>
+      <div className="absolute left-4 top-4 z-10 w-24 rounded border border-white/10 bg-bg/45 px-3 py-2 text-right backdrop-blur-sm">
+        <p className="font-stat text-2xl tabular-nums leading-none text-gold">
+          {selected?.performance_score.toFixed(1) ?? "0.0"}
+        </p>
+        <p className="text-xs text-ink-muted">score</p>
       </div>
-
-      <label className="relative mt-4 block text-xs text-ink-muted">
-        Player
-        <select
-          value={playerValue}
-          onChange={(event) => onPlayerChange(event.target.value)}
-          className="mt-2 w-full rounded border border-white/10 bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-gold"
+      {selected ? (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label={`Remove ${selected.player}`}
+          className="matchup-player-clear absolute right-3 top-3 z-20 flex size-7 items-center justify-center rounded border border-white/10 bg-bg/80 font-stat text-xs text-ink-muted shadow-lg shadow-bg/30 transition-colors hover:border-red-side/60 hover:text-ink focus:border-gold focus:outline-none"
         >
-          <option value="">
-            {playerOptions.length > 0
-              ? "Select a player"
-              : "No same-role players"}
-          </option>
-          {playerOptions.map((player) => (
-            <option key={player.key} value={player.key}>
-              {player.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          X
+        </button>
+      ) : null}
+      <div className="matchup-player-content min-h-20" />
+
+      {selected ? (
+        <div className="matchup-player-content mt-4">
+          <p className="text-xs text-ink-muted">Player</p>
+          <div className="mt-2 rounded border border-white/10 bg-bg/70 px-4 py-3 backdrop-blur-sm">
+            <h2 className="truncate font-display text-xl font-bold tracking-tight text-ink">
+              {selected.player}
+            </h2>
+            <p className="mt-1 truncate text-xs text-ink-muted">
+              {selected.team} / {ROLE_LABELS[selected.position]}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <label className="matchup-player-content mt-4 block text-xs text-ink-muted">
+          Player
+          <div className="relative mt-2">
+            <select
+              value={playerValue}
+              onChange={(event) => onPlayerChange(event.target.value)}
+              className="w-full appearance-none rounded border border-white/10 bg-bg py-2.5 pl-4 pr-12 text-sm text-ink outline-none transition-colors hover:border-white/20 focus:border-gold"
+            >
+              <option value="">
+                {playerOptions.length > 0
+                  ? "Select a player"
+                  : "No same-role players"}
+              </option>
+              {playerOptions.map((player) => (
+                <option key={player.key} value={player.key}>
+                  {player.label}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-4 top-1/2 size-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-ink-muted"
+            />
+          </div>
+        </label>
+      )}
     </div>
   );
 }
@@ -690,9 +775,13 @@ function toPlayerOptions(players: PlayerMatchupSummary[]): PlayerOption[] {
 
 export default function PlayerChampionMatchup({
   matchups,
+  playerProfiles,
+  teamObjectiveStats,
   assets,
 }: {
   matchups: PlayerChampionMatchupProfile[];
+  playerProfiles?: PlayerRoleProfile[];
+  teamObjectiveStats?: TeamObjectiveStat[];
   assets?: EsportsAssets;
 }) {
   const playerSummaries = useMemo(() => {
@@ -705,10 +794,56 @@ export default function PlayerChampionMatchup({
       grouped.set(key, current);
     }
 
+    const profileByPlayerRole = new Map(
+      (playerProfiles ?? []).map((profile) => [
+        `${profile.player_id}:${profile.position}`,
+        profile,
+      ]),
+    );
+    const objectivesByGameTeam = new Map(
+      (teamObjectiveStats ?? []).map((row) => [
+        `${row.game_id}:${row.team_id}`,
+        row,
+      ]),
+    );
+
     return Array.from(grouped.entries())
       .map(([key, picks]) => summarizePlayer(key, picks))
+      .map((summary) => {
+        const profile = profileByPlayerRole.get(summary.id);
+        const objectiveRows = summary.games
+          .map((game) =>
+            objectivesByGameTeam.get(`${game.game_id}:${game.team_id}`),
+          )
+          .filter(
+            (row): row is TeamObjectiveStat => Boolean(row?.has_objective_stats),
+          );
+        const objectiveGames = objectiveRows.length;
+        const objectiveAverage = (key: keyof TeamObjectiveStat) =>
+          objectiveGames > 0
+            ? round(
+                objectiveRows.reduce(
+                  (sum, row) => sum + Number(row[key]),
+                  0,
+                ) / objectiveGames,
+              )
+            : 0;
+
+        return {
+          ...summary,
+          avg_wards_placed: profile?.avg_wards_placed ?? 0,
+          avg_wards_killed: profile?.avg_wards_killed ?? 0,
+          avg_control_wards_bought: profile?.avg_control_wards_bought ?? 0,
+          avg_grubs: objectiveAverage("grubs"),
+          avg_heralds: objectiveAverage("heralds"),
+          avg_dragons: objectiveAverage("dragons"),
+          avg_barons: objectiveAverage("barons"),
+          avg_turrets_destroyed: objectiveAverage("turrets_destroyed"),
+          has_objective_stats: objectiveGames > 0,
+        };
+      })
       .sort((a, b) => a.player.localeCompare(b.player));
-  }, [matchups]);
+  }, [matchups, playerProfiles, teamObjectiveStats]);
 
   const [leftPlayer, setLeftPlayer] = useState("");
   const [rightPlayer, setRightPlayer] = useState("");
@@ -797,6 +932,10 @@ export default function PlayerChampionMatchup({
     hasComparison && selectedLeft && selectedRight
       ? headToHeadRecord(selectedLeft, selectedRight)
       : null;
+  const statSections =
+    selectedLeft?.has_objective_stats || selectedRight?.has_objective_stats
+      ? [...STAT_SECTIONS, OBJECTIVE_SECTION]
+      : STAT_SECTIONS;
 
   return (
     <section className="overflow-hidden rounded-lg border border-white/10 bg-[#11161d]">
@@ -814,6 +953,7 @@ export default function PlayerChampionMatchup({
           playerOptions={leftPlayerOptions}
           assets={assets}
           onPlayerChange={handleLeftPlayerChange}
+          onClear={() => setLeftPlayer("")}
         />
         <PlayerHeader
           side="right"
@@ -822,16 +962,16 @@ export default function PlayerChampionMatchup({
           playerOptions={rightPlayerOptions}
           assets={assets}
           onPlayerChange={handleRightPlayerChange}
+          onClear={() => setRightPlayer("")}
         />
       </div>
 
       {hasComparison && selectedLeft && selectedRight && headToHead ? (
         <>
-          <div className="grid grid-cols-2 border-b border-white/10 px-4 py-3 text-center text-sm">
+          <div className="border-b border-white/10 px-4 py-3 text-center text-sm">
             <div className="rounded border border-indigo-300/40 bg-indigo-300/10 py-2 font-semibold text-ink">
               Head to Head
             </div>
-            <div className="py-2 text-ink-muted">Overall</div>
           </div>
 
           <HeadToHeadWins
@@ -871,7 +1011,7 @@ export default function PlayerChampionMatchup({
           </div>
 
           <div className="px-4 pb-5">
-            {STAT_SECTIONS.map((section) => (
+            {statSections.map((section) => (
               <div key={section.title} className="mt-5">
                 <p className="rounded bg-white/5 py-2 text-center font-stat text-xs uppercase text-indigo-300">
                   {section.title}

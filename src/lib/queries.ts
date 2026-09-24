@@ -16,6 +16,7 @@ import type {
   RecentGame,
   RecentGameSide,
   SplitGoldSwing,
+  TeamObjectiveStat,
   TeamSideProfile,
   TeamSideWinRate,
   TeamStanding,
@@ -201,6 +202,16 @@ type RawScopedTeamObjective = {
   first_tower: boolean | null
 }
 
+type RawTeamObjectiveStat = {
+  game_id: string
+  team_id: string
+  dragons: NumericValue
+  heralds: NumericValue
+  void_grubs: NumericValue
+  barons: NumericValue
+  towers: NumericValue
+}
+
 type RawGameDuration = {
   game_id: string
   game_length_seconds: NumericValue
@@ -313,6 +324,22 @@ function isMissingPlayerProfileMetricError(error: unknown) {
     record.code === '42703' &&
     (message.includes('avg_kill_participation_pct') ||
       message.includes('avg_gold_per_min'))
+  )
+}
+
+function isMissingObjectiveMetricError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+
+  const record = error as { code?: unknown; message?: unknown }
+  const message = String(record.message ?? '')
+
+  return (
+    record.code === '42703' &&
+    (message.includes('void_grubs') ||
+      message.includes('heralds') ||
+      message.includes('dragons') ||
+      message.includes('barons') ||
+      message.includes('towers'))
   )
 }
 
@@ -664,6 +691,43 @@ async function getObjectivesByTeamGame(gameIds: string[]) {
   return new Map(
     objectiveRows.map((row) => [`${row.game_id}:${row.team_id}`, row]),
   )
+}
+
+export async function getTeamObjectiveStatsForGameIds(
+  gameIds: string[],
+): Promise<TeamObjectiveStat[]> {
+  try {
+    const rows = await fetchRowsByGameIds<RawTeamObjectiveStat>(
+      'game_team_stats',
+      'game_id, team_id, void_grubs, heralds, dragons, barons, towers',
+      gameIds,
+      ['game_id', 'team_id'],
+    )
+
+    return rows.map((row) => {
+      const rawValues = [
+        row.void_grubs,
+        row.heralds,
+        row.dragons,
+        row.barons,
+        row.towers,
+      ]
+
+      return {
+        game_id: row.game_id,
+        team_id: row.team_id,
+        grubs: toNumber(row.void_grubs),
+        heralds: toNumber(row.heralds),
+        dragons: toNumber(row.dragons),
+        barons: toNumber(row.barons),
+        turrets_destroyed: toNumber(row.towers),
+        has_objective_stats: rawValues.some((value) => value !== null),
+      }
+    })
+  } catch (error) {
+    if (isMissingObjectiveMetricError(error)) return []
+    throw error
+  }
 }
 
 async function getGameDurations(gameIds: string[]) {

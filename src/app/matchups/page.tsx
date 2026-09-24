@@ -1,12 +1,26 @@
 import PlayerChampionMatchup from "@/components/matchups/PlayerChampionMatchup";
 import { getLckEsportsAssets } from "@/lib/esports-assets";
-import { getPlayerChampionMatchups } from "@/lib/queries";
+import {
+  getPlayerChampionMatchups,
+  getPlayerRoleProfiles,
+  getTeamObjectiveStatsForGameIds,
+} from "@/lib/queries";
 
 export default async function MatchupsPage() {
-  const [matchups, esportsAssets] = await Promise.all([
+  const [matchups, playerProfiles, esportsAssets] = await Promise.all([
     getPlayerChampionMatchups(),
+    getPlayerRoleProfiles(),
     getLckEsportsAssets(),
   ]);
+  const matchupGameIds = Array.from(
+    new Set(
+      matchups.flatMap((profile) =>
+        profile.games.map((game) => game.game_id),
+      ),
+    ),
+  );
+  const teamObjectiveStats =
+    await getTeamObjectiveStatsForGameIds(matchupGameIds);
 
   return (
     <div className="flex flex-col gap-10">
@@ -23,7 +37,12 @@ export default async function MatchupsPage() {
         </div>
       </section>
 
-      <PlayerChampionMatchup matchups={matchups} assets={esportsAssets} />
+      <PlayerChampionMatchup
+        matchups={matchups}
+        playerProfiles={playerProfiles}
+        teamObjectiveStats={teamObjectiveStats}
+        assets={esportsAssets}
+      />
     </div>
   );
 }

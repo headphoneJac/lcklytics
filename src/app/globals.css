@@ -118,6 +118,30 @@ body::before {
   z-index: 1;
 }
 
+.asset-bg-matchup-player::before {
+  background-image: var(--asset-row-image);
+  background-position: left -1.75rem center;
+  background-repeat: no-repeat;
+  background-size: auto 145%;
+  content: '';
+  inset: 0 auto 0 0;
+  opacity: 0.18;
+  pointer-events: none;
+  position: absolute;
+  width: min(21rem, 64%);
+  z-index: 0;
+}
+
+.asset-bg-matchup-player-right::before {
+  inset: 0 0 0 auto;
+  transform: scaleX(-1);
+}
+
+.asset-bg-matchup-player > .matchup-player-content {
+  position: relative;
+  z-index: 1;
+}
+
 @media (min-width: 48rem) {
   .asset-bg-snapshot-player {
     --snapshot-player-card-padding: 1.5rem;

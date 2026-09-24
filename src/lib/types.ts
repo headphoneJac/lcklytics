@@ -153,6 +153,17 @@ export interface PlayerChampionMatchupProfile {
   }[]
 }
 
+export interface TeamObjectiveStat {
+  game_id: string
+  team_id: string
+  grubs: number
+  heralds: number
+  dragons: number
+  barons: number
+  turrets_destroyed: number
+  has_objective_stats: boolean
+}
+
 export interface PomLeader {
   player: string
   team: string | null

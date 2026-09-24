@@ -34,7 +34,7 @@ export default function RootLayout({
       lang="en"
       className={`${rajdhani.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
-      <body>
+      <body suppressHydrationWarning>
         <NavBar />
         <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
         <footer className="mx-auto max-w-6xl px-6 pb-8 text-xs leading-5 text-ink-muted">
