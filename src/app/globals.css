@@ -120,20 +120,18 @@ body::before {
 
 .asset-bg-matchup-player::before {
   background-image: var(--asset-row-image);
-  background-position: left -1.75rem center;
+  background-position: center;
   background-repeat: no-repeat;
   background-size: auto 145%;
   content: '';
-  inset: 0 auto 0 0;
-  opacity: 0.18;
+  inset: 0;
+  opacity: 0.50;
   pointer-events: none;
   position: absolute;
-  width: min(21rem, 64%);
   z-index: 0;
 }
 
 .asset-bg-matchup-player-right::before {
-  inset: 0 0 0 auto;
   transform: scaleX(-1);
 }
 

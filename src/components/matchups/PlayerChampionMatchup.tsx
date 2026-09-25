@@ -17,6 +17,7 @@ import type {
   TeamObjectiveStat,
 } from "@/lib/types";
 import ChampionIcon from "@/components/images/ChampionIcon";
+import TeamLogo from "@/components/images/TeamLogo";
 import { playerRowBackgroundStyle } from "@/components/images/row-background";
 import type { EsportsAssets } from "@/lib/assets";
 
@@ -497,11 +498,10 @@ function PlayerHeader({
       }
     >
       <div
-        className={`absolute inset-y-0 w-28 opacity-25 ${
-          side === "left" ? "right-0 bg-blue-side" : "left-0 bg-red-side"
+        className={`absolute top-4 z-10 w-24 rounded border border-white/10 bg-bg/45 px-3 py-2 backdrop-blur-sm ${
+          side === "right" ? "right-4 text-right" : "left-4 text-left"
         }`}
-      />
-      <div className="absolute left-4 top-4 z-10 w-24 rounded border border-white/10 bg-bg/45 px-3 py-2 text-right backdrop-blur-sm">
+      >
         <p className="font-stat text-2xl tabular-nums leading-none text-gold">
           {selected?.performance_score.toFixed(1) ?? "0.0"}
         </p>
@@ -512,9 +512,11 @@ function PlayerHeader({
           type="button"
           onClick={onClear}
           aria-label={`Remove ${selected.player}`}
-          className="matchup-player-clear absolute right-3 top-3 z-20 flex size-7 items-center justify-center rounded border border-white/10 bg-bg/80 font-stat text-xs text-ink-muted shadow-lg shadow-bg/30 transition-colors hover:border-red-side/60 hover:text-ink focus:border-gold focus:outline-none"
+          className={`matchup-player-clear absolute top-3 z-20 flex size-7 items-center justify-center rounded border border-white/10 bg-bg/80 font-stat text-lg text-ink-muted shadow-lg shadow-bg/30 transition-colors hover:border-red-side/60 hover:text-ink focus:border-gold focus:outline-none ${
+            side === "right" ? "left-3" : "right-3"
+          }`}
         >
-          X
+          ×
         </button>
       ) : null}
       <div className="matchup-player-content min-h-20" />
@@ -522,13 +524,20 @@ function PlayerHeader({
       {selected ? (
         <div className="matchup-player-content mt-4">
           <p className="text-xs text-ink-muted">Player</p>
-          <div className="mt-2 rounded border border-white/10 bg-bg/70 px-4 py-3 backdrop-blur-sm">
-            <h2 className="truncate font-display text-xl font-bold tracking-tight text-ink">
+          <div className="mt-2 flex min-h-[42px] items-center gap-2 rounded border border-white/10 bg-bg/70 px-4 py-2.5 text-sm text-ink backdrop-blur-sm">
+            <TeamLogo
+              team={selected.team}
+              assets={assets}
+              className="size-5 shrink-0 rounded-sm"
+            />
+            <span className="shrink-0 text-ink-muted">/</span>
+            <span className="shrink-0 text-ink-muted">
+              {ROLE_LABELS[selected.position]}
+            </span>
+            <span className="shrink-0 text-ink-muted">-</span>
+            <span className="min-w-0 truncate font-semibold text-ink">
               {selected.player}
-            </h2>
-            <p className="mt-1 truncate text-xs text-ink-muted">
-              {selected.team} / {ROLE_LABELS[selected.position]}
-            </p>
+            </span>
           </div>
         </div>
       ) : (
@@ -815,17 +824,15 @@ export default function PlayerChampionMatchup({
           .map((game) =>
             objectivesByGameTeam.get(`${game.game_id}:${game.team_id}`),
           )
-          .filter(
-            (row): row is TeamObjectiveStat => Boolean(row?.has_objective_stats),
+          .filter((row): row is TeamObjectiveStat =>
+            Boolean(row?.has_objective_stats),
           );
         const objectiveGames = objectiveRows.length;
         const objectiveAverage = (key: keyof TeamObjectiveStat) =>
           objectiveGames > 0
             ? round(
-                objectiveRows.reduce(
-                  (sum, row) => sum + Number(row[key]),
-                  0,
-                ) / objectiveGames,
+                objectiveRows.reduce((sum, row) => sum + Number(row[key]), 0) /
+                  objectiveGames,
               )
             : 0;
 

@@ -45,6 +45,11 @@ const ROLE_ORDER: PlayerRole[] = ["top", "jng", "mid", "bot", "sup"];
 const DEFAULT_MIN_LEADERBOARD_GAMES = 10;
 const COMPACT_MIN_LEADERBOARD_GAMES = 5;
 const ROUNDS_3_4_SPLIT_KEY = "Rounds 3-4";
+const ALL_SPLITS_PROGRESS_MATCH_END = 188;
+const ROUNDS_1_2_PLACEMENT_MATCHES = new Set([
+  10, 20, 30, 40, 50, 60, 70, 80, 90,
+]);
+const ROUNDS_3_4_PLACEMENT_MATCHES = new Set([10, 20, 30, 40]);
 const ROUNDS_3_4_GROUPS = [
   {
     name: "Legend Group",
@@ -77,6 +82,10 @@ function formatRecord(wins: number, games: number) {
 
 function winRate(wins: number, games: number) {
   return games > 0 ? (wins / games) * 100 : 0;
+}
+
+function roundedWinRate(wins: number, games: number) {
+  return games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0;
 }
 
 function formatMatchRecord(team: TeamSideProfile) {
@@ -590,6 +599,64 @@ function sortTeamsByMatchRecord(teams: TeamSideProfile[]) {
   });
 }
 
+function mergeTeamSideProfiles(
+  baseTeams: TeamSideProfile[],
+  currentTeams: TeamSideProfile[],
+) {
+  const teams = new Map<string, TeamSideProfile>();
+
+  for (const team of [...baseTeams, ...currentTeams]) {
+    const current = teams.get(team.team);
+
+    if (!current) {
+      teams.set(team.team, { ...team });
+      continue;
+    }
+
+    current.matches_played += team.matches_played;
+    current.match_wins += team.match_wins;
+    current.match_losses += team.match_losses;
+    current.games_played += team.games_played;
+    current.game_wins += team.game_wins;
+    current.game_losses += team.game_losses;
+    current.blue_games_played += team.blue_games_played;
+    current.blue_wins += team.blue_wins;
+    current.red_games_played += team.red_games_played;
+    current.red_wins += team.red_wins;
+    current.first_pick_games_played += team.first_pick_games_played;
+    current.first_pick_wins += team.first_pick_wins;
+    current.second_pick_games_played += team.second_pick_games_played;
+    current.second_pick_wins += team.second_pick_wins;
+  }
+
+  return Array.from(teams.values()).map((team) => {
+    const blueWinRate = roundedWinRate(
+      team.blue_wins,
+      team.blue_games_played,
+    );
+    const redWinRate = roundedWinRate(team.red_wins, team.red_games_played);
+
+    return {
+      ...team,
+      win_rate_pct: roundedWinRate(team.game_wins, team.games_played),
+      blue_win_rate_pct: blueWinRate,
+      red_win_rate_pct: redWinRate,
+      side_delta_pct:
+        team.blue_games_played > 0 && team.red_games_played > 0
+          ? Number((blueWinRate - redWinRate).toFixed(1))
+          : null,
+      first_pick_win_rate_pct: roundedWinRate(
+        team.first_pick_wins,
+        team.first_pick_games_played,
+      ),
+      second_pick_win_rate_pct: roundedWinRate(
+        team.second_pick_wins,
+        team.second_pick_games_played,
+      ),
+    };
+  });
+}
+
 function compareProgressRecords(
   teamA: string,
   teamB: string,
@@ -651,6 +718,135 @@ function buildGroupedProgressionPoints(
       };
     })
     .filter((point) => Object.keys(point.values).length > 0);
+}
+
+function buildPlacementChartProgression(
+  points: TeamProgressPoint[],
+  splitKey: string,
+  roundsOneTwoProgression: TeamProgressPoint[] = [],
+) {
+  if (splitKey === DEFAULT_SPLIT_KEY) {
+    const checkpointPoints = points.filter(
+      (point) =>
+        point.match_index % 10 === 0 ||
+        point.match_index === ALL_SPLITS_PROGRESS_MATCH_END,
+    );
+    const baselinePoint = checkpointPoints[0];
+
+    if (!baselinePoint) return checkpointPoints;
+
+    const teams = Object.keys(baselinePoint.records);
+
+    return [
+      {
+        date: "",
+        match_index: 0,
+        is_neutral_baseline: true,
+        values: baselinePoint.values,
+        records: Object.fromEntries(
+          teams.map((team) => [
+            team,
+            {
+              match_wins: 0,
+              match_losses: 0,
+              game_wins: 0,
+              game_losses: 0,
+            },
+          ]),
+        ),
+      },
+      ...checkpointPoints,
+    ];
+  }
+
+  if (splitKey === "Rounds 1-2") {
+    const checkpointPoints = points.filter((point) =>
+      ROUNDS_1_2_PLACEMENT_MATCHES.has(point.match_index),
+    );
+    const baselinePoint = checkpointPoints[0];
+
+    if (!baselinePoint) return checkpointPoints;
+
+    const teams = Object.keys(baselinePoint.values);
+
+    return [
+      {
+        ...baselinePoint,
+        date: "",
+        match_index: 0,
+        is_visual_baseline: true,
+        records: Object.fromEntries(
+          teams.map((team) => [
+            team,
+            {
+              match_wins: 0,
+              match_losses: 0,
+              game_wins: 0,
+              game_losses: 0,
+            },
+          ]),
+        ),
+      },
+      ...checkpointPoints,
+    ];
+  }
+
+  if (splitKey === ROUNDS_3_4_SPLIT_KEY) {
+    const seededPoint = roundsOneTwoProgression.at(-1);
+    const checkpointPoints = points.filter((point) =>
+      ROUNDS_3_4_PLACEMENT_MATCHES.has(point.match_index),
+    );
+
+    if (!seededPoint) return checkpointPoints;
+
+    const cumulativeCheckpointPoints = checkpointPoints.map((point) => {
+      const teamNames = Array.from(
+        new Set([
+          ...Object.keys(seededPoint.records),
+          ...Object.keys(point.records),
+        ]),
+      );
+
+      return {
+        ...point,
+        records: Object.fromEntries(
+          teamNames.map((team) => {
+            const seededRecord = seededPoint.records[team];
+            const pointRecord = point.records[team];
+
+            return [
+              team,
+              {
+                match_wins:
+                  (seededRecord?.match_wins ?? 0) +
+                  (pointRecord?.match_wins ?? 0),
+                match_losses:
+                  (seededRecord?.match_losses ?? 0) +
+                  (pointRecord?.match_losses ?? 0),
+                game_wins:
+                  (seededRecord?.game_wins ?? 0) +
+                  (pointRecord?.game_wins ?? 0),
+                game_losses:
+                  (seededRecord?.game_losses ?? 0) +
+                  (pointRecord?.game_losses ?? 0),
+              },
+            ];
+          }),
+        ),
+      };
+    });
+
+    return [
+      {
+        ...seededPoint,
+        date: "",
+        match_index: 0,
+      },
+      ...cumulativeCheckpointPoints,
+    ];
+  }
+
+  return points;
 }
 
 function TeamFormPickOrderTable({
@@ -1004,14 +1200,27 @@ export default async function AnalysisPage({
   const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
     ? requestedSplitKey
     : DEFAULT_SPLIT_KEY;
-  const [teams, players, champions, teamProgression, esportsAssets] =
-    await Promise.all([
-      getTeamPageSideProfiles(splitKey),
-      getPlayerRoleProfiles(splitKey),
-      getChampionProfiles(splitKey),
-      getTeamProgression(splitKey),
-      getLckEsportsAssets(),
-    ]);
+  const [
+    teams,
+    players,
+    champions,
+    teamProgression,
+    roundsOneTwoTeams,
+    roundsOneTwoProgression,
+    esportsAssets,
+  ] = await Promise.all([
+    getTeamPageSideProfiles(splitKey),
+    getPlayerRoleProfiles(splitKey),
+    getChampionProfiles(splitKey),
+    getTeamProgression(splitKey),
+    splitKey === ROUNDS_3_4_SPLIT_KEY
+      ? getTeamPageSideProfiles("Rounds 1-2")
+      : Promise.resolve([] as TeamSideProfile[]),
+    splitKey === ROUNDS_3_4_SPLIT_KEY
+      ? getTeamProgression("Rounds 1-2")
+      : Promise.resolve([] as TeamProgressPoint[]),
+    getLckEsportsAssets(),
+  ]);
   const currentSplit = getSplitLabel(splits, splitKey);
   const minimumPlayerGames =
     teams.length > 0 && Math.max(...teams.map((team) => team.games_played)) < 20
@@ -1024,7 +1233,11 @@ export default async function AnalysisPage({
   const playerInsight = buildPlayerInsight(players, minimumPlayerGames);
   const championInsight = buildChampionInsight(champions);
   const sidePickImpact = aggregateSidePickImpact(teams);
-  const matchOrderedTeams = sortTeamsByMatchRecord(teams);
+  const standingsTeams =
+    splitKey === ROUNDS_3_4_SPLIT_KEY
+      ? mergeTeamSideProfiles(roundsOneTwoTeams, teams)
+      : teams;
+  const matchOrderedTeams = sortTeamsByMatchRecord(standingsTeams);
   const matchOrderedTeamNames = matchOrderedTeams.map((team) => team.team);
   const progressionTeams = Array.from(
     new Set(teamProgression.flatMap((point) => Object.keys(point.values))),
@@ -1037,12 +1250,17 @@ export default async function AnalysisPage({
     if (indexB !== -1) return 1;
     return a.localeCompare(b);
   });
+  const placementChartProgression = buildPlacementChartProgression(
+    teamProgression,
+    splitKey,
+    roundsOneTwoProgression,
+  );
   const teamGroupSections =
     splitKey === ROUNDS_3_4_SPLIT_KEY
       ? ROUNDS_3_4_GROUPS.map((group) => {
           const groupTeamNames = new Set<string>(group.teams);
           const groupTeams = sortTeamsByMatchRecord(
-            teams.filter((team) => groupTeamNames.has(team.team)),
+            standingsTeams.filter((team) => groupTeamNames.has(team.team)),
           );
           const groupProgressionTeams = groupTeams.map((team) => team.team);
 
@@ -1051,13 +1269,15 @@ export default async function AnalysisPage({
             teams: groupTeams,
             progressionTeams: groupProgressionTeams,
             progression: buildGroupedProgressionPoints(
-              teamProgression,
+              placementChartProgression,
               groupProgressionTeams,
             ),
           };
         }).filter((group) => group.teams.length > 0)
       : [];
   const hasTeamGroupSections = teamGroupSections.length > 0;
+  const progressChartMetric =
+    splitKey === DEFAULT_SPLIT_KEY ? "gameWinRate" : "placement";
   const rolePlayerGroups = ROLE_ORDER.map((role) => ({
     role,
     players: topBy(
@@ -1096,7 +1316,9 @@ export default async function AnalysisPage({
   );
   const showPlacementChart = !HIDE_PLACEMENT_CHART_SPLITS.has(splitKey);
   const placementChartTickStep =
-    splitKey === "Rounds 1-2" || splitKey === ROUNDS_3_4_SPLIT_KEY
+    splitKey === DEFAULT_SPLIT_KEY ||
+    splitKey === "Rounds 1-2" ||
+    splitKey === ROUNDS_3_4_SPLIT_KEY
       ? 10
       : undefined;
 
@@ -1266,13 +1488,27 @@ export default async function AnalysisPage({
         <section className="flex flex-col gap-5">
           <SectionHeader
             eyebrow="Teams"
-            title="Team Placement Over Time"
-            description="Standings placement after each loaded match in the selected scope, ranked by match record first and game record second."
+            title={
+              progressChartMetric === "gameWinRate"
+                ? "Team Game Win Rate Over Time"
+                : "Team Placement Over Time"
+            }
+            description={
+              progressChartMetric === "gameWinRate"
+                ? "Game win rate after each loaded match in the selected scope."
+                : "Standings placement after each loaded match in the selected scope, ranked by match record first and game record second."
+            }
           />
           <TeamProgressChart
-            points={teamProgression}
+            points={placementChartProgression}
             teams={progressionTeams}
             matchOrderTickStep={placementChartTickStep}
+            matchOrderMax={
+              splitKey === DEFAULT_SPLIT_KEY
+                ? ALL_SPLITS_PROGRESS_MATCH_END
+                : undefined
+            }
+            metric={progressChartMetric}
           />
         </section>
       ) : null}
