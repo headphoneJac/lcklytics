@@ -164,6 +164,47 @@ export interface TeamObjectiveStat {
   has_objective_stats: boolean
 }
 
+export interface ObjectiveWinRateSummary {
+  games: number
+  wins: number
+  win_rate_pct: number
+}
+
+export interface ObjectiveConversionLoss {
+  game_id: string
+  game_date: string
+  split: string
+  team: string
+  opponent: string
+  elders?: number
+  elemental_dragons: number
+  barons: number
+}
+
+export interface ObjectiveTeamFlag {
+  team: string
+  games: number
+  count: number
+  rate_pct: number
+}
+
+export interface ObjectiveComebackThrowFlags {
+  comebackWins: number
+  throwLosses: number
+  comebackTeam?: ObjectiveTeamFlag
+  throwTeam?: ObjectiveTeamFlag
+}
+
+export interface ObjectiveInsightStats {
+  baron: ObjectiveWinRateSummary
+  dragonSoul: ObjectiveWinRateSummary
+  elderDragon: ObjectiveWinRateSummary
+  baronLosses: ObjectiveConversionLoss[]
+  dragonSoulLosses: ObjectiveConversionLoss[]
+  elderDragonLosses: ObjectiveConversionLoss[]
+  comebackThrowFlags: ObjectiveComebackThrowFlags
+}
+
 export interface PomLeader {
   player: string
   team: string | null

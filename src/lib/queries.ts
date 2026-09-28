@@ -8,6 +8,7 @@ import type {
   HomeSeasonOverview,
   HomeStandingRow,
   HomeTeamGroup,
+  ObjectiveInsightStats,
   PlayerChampionMatchupProfile,
   PlayerRadarMetric,
   PlayerRole,
@@ -212,6 +213,27 @@ type RawTeamObjectiveStat = {
   towers: NumericValue
 }
 
+type RawObjectiveInsightStat = {
+  game_id: string
+  team_id: string
+  result: boolean
+  infernals: NumericValue
+  mountains: NumericValue
+  clouds: NumericValue
+  oceans: NumericValue
+  chemtechs: NumericValue
+  hextechs: NumericValue
+  barons: NumericValue
+  elders: NumericValue
+  teams: SupabaseNestedTeam
+}
+
+type RawObjectiveInsightGame = {
+  game_id: string
+  split: string | null
+  game_date: string
+}
+
 type RawGameDuration = {
   game_id: string
   game_length_seconds: NumericValue
@@ -338,6 +360,13 @@ function isMissingObjectiveMetricError(error: unknown) {
     (message.includes('void_grubs') ||
       message.includes('heralds') ||
       message.includes('dragons') ||
+      message.includes('infernals') ||
+      message.includes('mountains') ||
+      message.includes('clouds') ||
+      message.includes('oceans') ||
+      message.includes('chemtechs') ||
+      message.includes('hextechs') ||
+      message.includes('elders') ||
       message.includes('barons') ||
       message.includes('towers'))
   )
@@ -727,6 +756,238 @@ export async function getTeamObjectiveStatsForGameIds(
   } catch (error) {
     if (isMissingObjectiveMetricError(error)) return []
     throw error
+  }
+}
+
+function emptyObjectiveWinRate() {
+  return {
+    games: 0,
+    wins: 0,
+    win_rate_pct: 0,
+  }
+}
+
+function emptyObjectiveInsightStats(): ObjectiveInsightStats {
+  return {
+    baron: emptyObjectiveWinRate(),
+    dragonSoul: emptyObjectiveWinRate(),
+    elderDragon: emptyObjectiveWinRate(),
+    baronLosses: [],
+    dragonSoulLosses: [],
+    elderDragonLosses: [],
+    comebackThrowFlags: {
+      comebackWins: 0,
+      throwLosses: 0,
+    },
+  }
+}
+
+function elementalDragonCount(row: RawObjectiveInsightStat) {
+  return (
+    toNumber(row.infernals) +
+    toNumber(row.mountains) +
+    toNumber(row.clouds) +
+    toNumber(row.oceans) +
+    toNumber(row.chemtechs) +
+    toNumber(row.hextechs)
+  )
+}
+
+function hasMajorObjectiveControl(row: RawObjectiveInsightStat) {
+  return toNumber(row.barons) > 0 || elementalDragonCount(row) === 4
+}
+
+export async function getObjectiveInsightStats(
+  splitKey = DEFAULT_SPLIT_KEY,
+): Promise<ObjectiveInsightStats> {
+  const gameIds = (await getGameIdsForTeamSplitScope(splitKey)) ?? []
+  if (gameIds.length === 0) return emptyObjectiveInsightStats()
+
+  let objectiveRows: RawObjectiveInsightStat[]
+
+  try {
+    objectiveRows = await fetchRowsByGameIds<RawObjectiveInsightStat>(
+      'game_team_stats',
+      'game_id, team_id, result, infernals, mountains, clouds, oceans, chemtechs, hextechs, barons, elders, teams ( name )',
+      gameIds,
+      ['game_id', 'team_id'],
+    )
+  } catch (error) {
+    if (isMissingObjectiveMetricError(error)) return emptyObjectiveInsightStats()
+    throw error
+  }
+
+  const gameRows = await fetchRowsByGameIds<RawObjectiveInsightGame>(
+    'games',
+    'game_id, split, game_date',
+    gameIds,
+    ['game_date', 'game_id'],
+  )
+  const gamesById = new Map(gameRows.map((game) => [game.game_id, game]))
+  const sidesByGame = new Map<string, RawObjectiveInsightStat[]>()
+
+  for (const row of objectiveRows) {
+    const sides = sidesByGame.get(row.game_id) ?? []
+    sides.push(row)
+    sidesByGame.set(row.game_id, sides)
+  }
+
+  function summarizeObjective(
+    hasObjective: (row: RawObjectiveInsightStat) => boolean,
+  ) {
+    const rows = objectiveRows.filter(hasObjective)
+    const wins = rows.filter((row) => row.result).length
+
+    return {
+      games: rows.length,
+      wins,
+      win_rate_pct: pct(wins, rows.length),
+    }
+  }
+
+  function buildConversionLosses(
+    didNotConvert: (row: RawObjectiveInsightStat) => boolean,
+    options: { includeElders?: boolean } = {},
+  ) {
+    return objectiveRows
+      .filter((row) => didNotConvert(row) && !row.result)
+      .map((row) => {
+        const game = gamesById.get(row.game_id)
+        const opponent = sidesByGame
+          .get(row.game_id)
+          ?.find((side) => side.team_id !== row.team_id)
+        const teamName = normalizeTeam(row.teams)?.name ?? row.team_id
+        const opponentName =
+          normalizeTeam(opponent?.teams ?? null)?.name ?? 'Unknown'
+
+        return {
+          game_id: row.game_id,
+          game_date: game?.game_date ?? '',
+          split: game?.split ?? 'Unknown split',
+          team: displayTeamName(teamName),
+          opponent: displayTeamName(opponentName),
+          ...(options.includeElders ? { elders: toNumber(row.elders) } : {}),
+          elemental_dragons: elementalDragonCount(row),
+          barons: toNumber(row.barons),
+        }
+      })
+      .sort((a, b) => b.game_date.localeCompare(a.game_date))
+      .slice(0, 5)
+  }
+
+  type FlagAccumulator = {
+    team: string
+    objectiveDeficitGames: number
+    comebackWins: number
+    objectiveControlGames: number
+    throwLosses: number
+  }
+
+  const flagTeams = new Map<string, FlagAccumulator>()
+
+  function getFlagTeam(row: RawObjectiveInsightStat) {
+    const teamName = displayTeamName(
+      normalizeTeam(row.teams)?.name ?? row.team_id,
+    )
+    const current =
+      flagTeams.get(teamName) ??
+      ({
+        team: teamName,
+        objectiveDeficitGames: 0,
+        comebackWins: 0,
+        objectiveControlGames: 0,
+        throwLosses: 0,
+      } satisfies FlagAccumulator)
+
+    flagTeams.set(teamName, current)
+    return current
+  }
+
+  for (const sides of sidesByGame.values()) {
+    if (sides.length !== 2) continue
+
+    for (const row of sides) {
+      const opponent = sides.find((side) => side.team_id !== row.team_id)
+      if (!opponent) continue
+
+      const teamControlled = hasMajorObjectiveControl(row)
+      const opponentControlled = hasMajorObjectiveControl(opponent)
+      const flagTeam = getFlagTeam(row)
+
+      if (teamControlled) {
+        flagTeam.objectiveControlGames += 1
+        flagTeam.throwLosses += row.result ? 0 : 1
+      }
+
+      if (!teamControlled && opponentControlled) {
+        flagTeam.objectiveDeficitGames += 1
+        flagTeam.comebackWins += row.result ? 1 : 0
+      }
+    }
+  }
+
+  function pickFlagLeader(
+    getCount: (team: FlagAccumulator) => number,
+    getGames: (team: FlagAccumulator) => number,
+  ) {
+    const leader = [...flagTeams.values()]
+      .filter((team) => getGames(team) > 0 && getCount(team) > 0)
+      .sort((a, b) => {
+        const countDelta = getCount(b) - getCount(a)
+        if (countDelta !== 0) return countDelta
+
+        const rateDelta =
+          pct(getCount(b), getGames(b)) - pct(getCount(a), getGames(a))
+        if (rateDelta !== 0) return rateDelta
+
+        return getGames(b) - getGames(a)
+      })[0]
+
+    if (!leader) return undefined
+
+    const games = getGames(leader)
+
+    return {
+      team: leader.team,
+      games,
+      count: getCount(leader),
+      rate_pct: pct(getCount(leader), games),
+    }
+  }
+
+  const comebackWins = [...flagTeams.values()].reduce(
+    (sum, team) => sum + team.comebackWins,
+    0,
+  )
+  const throwLosses = [...flagTeams.values()].reduce(
+    (sum, team) => sum + team.throwLosses,
+    0,
+  )
+
+  return {
+    baron: summarizeObjective((row) => toNumber(row.barons) > 0),
+    dragonSoul: summarizeObjective((row) => elementalDragonCount(row) === 4),
+    elderDragon: summarizeObjective((row) => toNumber(row.elders) > 0),
+    baronLosses: buildConversionLosses((row) => toNumber(row.barons) > 0),
+    dragonSoulLosses: buildConversionLosses(
+      (row) => elementalDragonCount(row) === 4,
+    ),
+    elderDragonLosses: buildConversionLosses(
+      (row) => toNumber(row.elders) > 0,
+      { includeElders: true },
+    ),
+    comebackThrowFlags: {
+      comebackWins,
+      throwLosses,
+      comebackTeam: pickFlagLeader(
+        (team) => team.comebackWins,
+        (team) => team.objectiveDeficitGames,
+      ),
+      throwTeam: pickFlagLeader(
+        (team) => team.throwLosses,
+        (team) => team.objectiveControlGames,
+      ),
+    },
   }
 }
 
