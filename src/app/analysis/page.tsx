@@ -34,10 +34,12 @@ import { getLckEsportsAssets } from "@/lib/esports-assets";
 import {
   DEFAULT_SPLIT_KEY,
   getChampionProfiles,
+  getDraftPressureTargets,
   getObjectiveInsightStats,
   getPlayerRoleProfiles,
   getTeamPageSideProfiles,
   getTeamProgression,
+  getTeamSignalContexts,
   getTeamSplitOptions,
 } from "@/lib/queries";
 import {
@@ -63,15 +65,18 @@ export default async function AnalysisPage({
     players,
     champions,
     teamProgression,
+    teamSignalContexts,
     roundsOneTwoTeams,
     roundsOneTwoProgression,
     objectiveInsights,
+    draftPressureTargets,
     esportsAssets,
   ] = await Promise.all([
     getTeamPageSideProfiles(splitKey),
     getPlayerRoleProfiles(splitKey),
     getChampionProfiles(splitKey),
     getTeamProgression(splitKey),
+    getTeamSignalContexts(splitKey),
     splitKey === ROUNDS_3_4_SPLIT_KEY
       ? getTeamPageSideProfiles("Rounds 1-2")
       : Promise.resolve([] as TeamSideProfile[]),
@@ -79,6 +84,7 @@ export default async function AnalysisPage({
       ? getTeamProgression("Rounds 1-2")
       : Promise.resolve([] as TeamProgressPoint[]),
     getObjectiveInsightStats(splitKey),
+    getDraftPressureTargets(splitKey),
     getLckEsportsAssets(),
   ]);
 
@@ -90,9 +96,9 @@ export default async function AnalysisPage({
   const qualifiedPlayers = players.filter(
     (player) => player.games_played >= minimumPlayerGames,
   );
-  const teamInsight = buildTeamInsight(teams);
+  const teamInsight = buildTeamInsight(teams, teamSignalContexts);
   const playerInsight = buildPlayerInsight(players, minimumPlayerGames);
-  const championInsight = buildChampionInsight(champions);
+  const championInsight = buildChampionInsight(champions, draftPressureTargets);
   const sidePickImpact = aggregateSidePickImpact(teams);
 
   const standingsTeams =

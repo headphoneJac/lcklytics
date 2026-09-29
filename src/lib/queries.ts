@@ -3,6 +3,7 @@ import type {
   ChampionProfile,
   ChampionRate,
   DashboardSplitOption,
+  DraftPressureTarget,
   GameDraft,
   HomeBracketSeries,
   HomeSeasonOverview,
@@ -17,6 +18,7 @@ import type {
   RecentGame,
   RecentGameSide,
   SplitGoldSwing,
+  TeamSignalContext,
   TeamObjectiveStat,
   TeamSideProfile,
   TeamSideWinRate,
@@ -216,6 +218,7 @@ type RawTeamObjectiveStat = {
 type RawObjectiveInsightStat = {
   game_id: string
   team_id: string
+  side: string
   result: boolean
   infernals: NumericValue
   mountains: NumericValue
@@ -226,6 +229,21 @@ type RawObjectiveInsightStat = {
   barons: NumericValue
   elders: NumericValue
   teams: SupabaseNestedTeam
+}
+
+type RawTeamProfileSide = RawHomeTeamSide & {
+  infernals: NumericValue
+  mountains: NumericValue
+  clouds: NumericValue
+  oceans: NumericValue
+  chemtechs: NumericValue
+  hextechs: NumericValue
+  void_grubs: NumericValue
+  barons: NumericValue
+  towers: NumericValue
+  total_gold: NumericValue
+  first_tower: boolean | null
+  first_blood: boolean | null
 }
 
 type RawObjectiveInsightGame = {
@@ -241,6 +259,7 @@ type RawGameDuration = {
 
 type RawScopedDraftAction = {
   game_id: string
+  side: string
   action_type: string
   champion: string | null
 }
@@ -554,6 +573,14 @@ export async function getTeamSideProfiles(
       second_pick_games_played: 0,
       second_pick_wins: 0,
       second_pick_win_rate_pct: 0,
+      pick_delta_pct: null,
+      avg_total_gold: 0,
+      avg_elemental_dragons: 0,
+      avg_grubs: 0,
+      avg_barons: 0,
+      avg_towers: 0,
+      first_tower_pct: 0,
+      first_blood_pct: 0,
     }
   })
 }
@@ -782,7 +809,12 @@ function emptyObjectiveInsightStats(): ObjectiveInsightStats {
   }
 }
 
-function elementalDragonCount(row: RawObjectiveInsightStat) {
+function elementalDragonCount(
+  row: Pick<
+    RawObjectiveInsightStat,
+    'infernals' | 'mountains' | 'clouds' | 'oceans' | 'chemtechs' | 'hextechs'
+  >,
+) {
   return (
     toNumber(row.infernals) +
     toNumber(row.mountains) +
@@ -808,7 +840,7 @@ export async function getObjectiveInsightStats(
   try {
     objectiveRows = await fetchRowsByGameIds<RawObjectiveInsightStat>(
       'game_team_stats',
-      'game_id, team_id, result, infernals, mountains, clouds, oceans, chemtechs, hextechs, barons, elders, teams ( name )',
+      'game_id, team_id, side, result, infernals, mountains, clouds, oceans, chemtechs, hextechs, barons, elders, teams ( name )',
       gameIds,
       ['game_id', 'team_id'],
     )
@@ -823,7 +855,25 @@ export async function getObjectiveInsightStats(
     gameIds,
     ['game_date', 'game_id'],
   )
+  const draftRows = await fetchRowsByGameIds<RawGameDraft>(
+    'game_draft_summary',
+    'game_id, side, bans, picks',
+    gameIds,
+    ['game_id', 'side'],
+  )
   const gamesById = new Map(gameRows.map((game) => [game.game_id, game]))
+  const draftsByGameSide = new Map(
+    draftRows
+      .filter((draft) => draft.side === 'Blue' || draft.side === 'Red')
+      .map((draft) => [
+        `${draft.game_id}:${draft.side}`,
+        {
+          side: draft.side as 'Blue' | 'Red',
+          bans: draft.bans,
+          picks: draft.picks,
+        },
+      ]),
+  )
   const sidesByGame = new Map<string, RawObjectiveInsightStat[]>()
 
   for (const row of objectiveRows) {
@@ -859,6 +909,32 @@ export async function getObjectiveInsightStats(
         const teamName = normalizeTeam(row.teams)?.name ?? row.team_id
         const opponentName =
           normalizeTeam(opponent?.teams ?? null)?.name ?? 'Unknown'
+        const rowDraft =
+          row.side === 'Blue' || row.side === 'Red'
+            ? draftsByGameSide.get(`${row.game_id}:${row.side}`)
+            : undefined
+        const opponentDraft =
+          opponent && (opponent.side === 'Blue' || opponent.side === 'Red')
+            ? draftsByGameSide.get(`${row.game_id}:${opponent.side}`)
+            : undefined
+        const drafts = [
+          rowDraft
+            ? {
+                team: displayTeamName(teamName),
+                side: rowDraft.side,
+                bans: rowDraft.bans,
+                picks: rowDraft.picks,
+              }
+            : null,
+          opponentDraft
+            ? {
+                team: displayTeamName(opponentName),
+                side: opponentDraft.side,
+                bans: opponentDraft.bans,
+                picks: opponentDraft.picks,
+              }
+            : null,
+        ].filter((draft) => draft !== null)
 
         return {
           game_id: row.game_id,
@@ -869,6 +945,7 @@ export async function getObjectiveInsightStats(
           ...(options.includeElders ? { elders: toNumber(row.elders) } : {}),
           elemental_dragons: elementalDragonCount(row),
           barons: toNumber(row.barons),
+          drafts,
         }
       })
       .sort((a, b) => b.game_date.localeCompare(a.game_date))
@@ -1429,6 +1506,124 @@ export async function getChampionProfiles(
     })
 }
 
+export async function getDraftPressureTargets(
+  splitKey = DEFAULT_SPLIT_KEY,
+): Promise<DraftPressureTarget[]> {
+  const gameIds = (await getGameIdsForTeamSplitScope(splitKey)) ?? []
+  if (gameIds.length === 0) return []
+
+  const [sideRows, banRows, matchupProfiles] = await Promise.all([
+    fetchRowsByGameIds<RawRecentGameSide>(
+      'game_team_stats',
+      'game_id, side, result, teams ( name )',
+      gameIds,
+      ['game_id', 'side'],
+    ),
+    fetchRowsByGameIds<RawScopedDraftAction>(
+      'draft_actions',
+      'game_id, side, action_type, champion',
+      gameIds,
+      ['game_id', 'side', 'action_type'],
+    ),
+    getPlayerChampionMatchups(splitKey),
+  ])
+
+  const sidesByGame = new Map<string, RawRecentGameSide[]>()
+
+  for (const side of sideRows) {
+    if (side.side !== 'Blue' && side.side !== 'Red') continue
+
+    const current = sidesByGame.get(side.game_id) ?? []
+    current.push(side)
+    sidesByGame.set(side.game_id, current)
+  }
+
+  const playerChampionByTeam = new Map<string, PlayerChampionMatchupProfile>()
+
+  for (const profile of matchupProfiles) {
+    const key = `${profile.team}:${profile.champion}`
+    const current = playerChampionByTeam.get(key)
+
+    if (
+      !current ||
+      profile.games_played > current.games_played ||
+      (profile.games_played === current.games_played &&
+        profile.performance_score > current.performance_score)
+    ) {
+      playerChampionByTeam.set(key, profile)
+    }
+  }
+
+  const pressureByTarget = new Map<
+    string,
+    {
+      champion: string
+      team: string
+      bansAgainst: number
+      totalBans: number
+    }
+  >()
+  const totalBansByChampion = new Map<string, number>()
+
+  for (const ban of banRows) {
+    if (ban.action_type !== 'ban' || !ban.champion) continue
+    if (ban.side !== 'Blue' && ban.side !== 'Red') continue
+
+    const sides = sidesByGame.get(ban.game_id) ?? []
+    const targetSide = ban.side === 'Blue' ? 'Red' : 'Blue'
+    const target = sides.find((side) => side.side === targetSide)
+    const targetTeam = normalizeTeam(target?.teams ?? null)?.name
+
+    if (!targetTeam) continue
+
+    const champion = ban.champion
+    const team = displayTeamName(targetTeam)
+    const key = `${champion}:${team}`
+    const current =
+      pressureByTarget.get(key) ??
+      ({
+        champion,
+        team,
+        bansAgainst: 0,
+        totalBans: 0,
+      } satisfies {
+        champion: string
+        team: string
+        bansAgainst: number
+        totalBans: number
+      })
+
+    current.bansAgainst += 1
+    pressureByTarget.set(key, current)
+    totalBansByChampion.set(champion, (totalBansByChampion.get(champion) ?? 0) + 1)
+  }
+
+  return [...pressureByTarget.values()]
+    .map((pressure) => {
+      const playerProfile = playerChampionByTeam.get(
+        `${pressure.team}:${pressure.champion}`,
+      )
+
+      return {
+        champion: pressure.champion,
+        team: pressure.team,
+        bans_against: pressure.bansAgainst,
+        total_bans: totalBansByChampion.get(pressure.champion) ?? pressure.bansAgainst,
+        player: playerProfile?.player,
+        player_position: playerProfile?.position,
+        player_games: playerProfile?.games_played,
+        player_win_rate_pct: playerProfile?.win_rate_pct,
+      }
+    })
+    .sort((a, b) => {
+      if (b.bans_against !== a.bans_against) {
+        return b.bans_against - a.bans_against
+      }
+      if (b.total_bans !== a.total_bans) return b.total_bans - a.total_bans
+      return a.champion.localeCompare(b.champion)
+    })
+}
+
 function normalizeMatchupMetric(
   profiles: PlayerChampionMatchupProfile[],
   profile: PlayerChampionMatchupProfile,
@@ -1748,10 +1943,17 @@ type RawHomeGame = {
 
 type RawHomeTeamSide = {
   game_id: string
+  team_id: string
   side: string
   first_pick: boolean | null
   result: boolean
   teams: SupabaseNestedTeam
+}
+
+type RawSignalPlayerGame = {
+  game_id: string
+  player_id: string
+  team_id: string
 }
 
 type InternalSeries = {
@@ -1944,20 +2146,22 @@ async function getLckGamesBySplit(
   return getLckGames({ split, playoffs })
 }
 
-async function getTeamSidesForGames(gameIds: string[]): Promise<RawHomeTeamSide[]> {
+async function getTeamSidesForGames(gameIds: string[]): Promise<RawTeamProfileSide[]> {
   if (gameIds.length === 0) return []
 
-  const rows: RawHomeTeamSide[] = []
+  const rows: RawTeamProfileSide[] = []
 
   for (let start = 0; start < gameIds.length; start += PAGE_SIZE) {
     const gameIdChunk = gameIds.slice(start, start + PAGE_SIZE)
     const { data, error } = await supabase
       .from('game_team_stats')
-      .select('game_id, side, first_pick, result, teams ( name )')
+      .select(
+        'game_id, team_id, side, first_pick, result, infernals, mountains, clouds, oceans, chemtechs, hextechs, void_grubs, barons, towers, total_gold, first_tower, first_blood, teams ( name )',
+      )
       .in('game_id', gameIdChunk)
 
     if (error) throw error
-    rows.push(...((data ?? []) as RawHomeTeamSide[]))
+    rows.push(...((data ?? []) as RawTeamProfileSide[]))
   }
 
   return rows
@@ -2043,13 +2247,23 @@ function isKnownSide(side: string): side is 'Blue' | 'Red' {
 
 function buildTeamSideProfiles(
   series: InternalSeries[],
-  sides: RawHomeTeamSide[],
+  sides: RawTeamProfileSide[],
 ): TeamSideProfile[] {
-  const teams = new Map<string, TeamSideProfile>()
+  type TeamSideProfileAccumulator = TeamSideProfile & {
+    total_gold_sum: number
+    elemental_dragons_sum: number
+    grubs_sum: number
+    barons_sum: number
+    towers_sum: number
+    first_towers: number
+    first_bloods: number
+  }
+
+  const teams = new Map<string, TeamSideProfileAccumulator>()
 
   function ensureTeam(team: string) {
     const current =
-      teams.get(team) ??
+      (teams.get(team) as TeamSideProfileAccumulator | undefined) ??
       ({
         team: displayTeamName(team),
         matches_played: 0,
@@ -2072,7 +2286,22 @@ function buildTeamSideProfiles(
         second_pick_games_played: 0,
         second_pick_wins: 0,
         second_pick_win_rate_pct: 0,
-      } satisfies TeamSideProfile)
+        pick_delta_pct: null,
+        avg_total_gold: 0,
+        avg_elemental_dragons: 0,
+        avg_grubs: 0,
+        avg_barons: 0,
+        avg_towers: 0,
+        first_tower_pct: 0,
+        first_blood_pct: 0,
+        total_gold_sum: 0,
+        elemental_dragons_sum: 0,
+        grubs_sum: 0,
+        barons_sum: 0,
+        towers_sum: 0,
+        first_towers: 0,
+        first_bloods: 0,
+      } satisfies TeamSideProfileAccumulator)
 
     teams.set(team, current)
     return current
@@ -2126,6 +2355,14 @@ function buildTeamSideProfiles(
       team.second_pick_games_played += 1
       team.second_pick_wins += side.result ? 1 : 0
     }
+
+    team.total_gold_sum += toNumber(side.total_gold)
+    team.elemental_dragons_sum += elementalDragonCount(side)
+    team.grubs_sum += toNumber(side.void_grubs)
+    team.barons_sum += toNumber(side.barons)
+    team.towers_sum += toNumber(side.towers)
+    team.first_towers += side.first_tower ? 1 : 0
+    team.first_bloods += side.first_blood ? 1 : 0
   }
 
   return Array.from(teams.values())
@@ -2142,24 +2379,68 @@ function buildTeamSideProfiles(
         team.blue_games_played > 0 && team.red_games_played > 0
           ? round(blueWinRate - redWinRate)
           : null
+      const firstPickWinRate = pct(
+        team.first_pick_wins,
+        team.first_pick_games_played,
+      )
+      const secondPickWinRate = pct(
+        team.second_pick_wins,
+        team.second_pick_games_played,
+      )
+      const pickDelta =
+        team.first_pick_games_played > 0 && team.second_pick_games_played > 0
+          ? round(firstPickWinRate - secondPickWinRate)
+          : null
+      const accumulator = team as TeamSideProfileAccumulator
 
       return {
-        ...team,
+        team: team.team,
+        matches_played: team.matches_played,
+        match_wins: team.match_wins,
+        match_losses: team.match_losses,
+        games_played: team.games_played,
+        game_wins: team.game_wins,
+        game_losses: team.game_losses,
         win_rate_pct:
           team.games_played > 0
             ? round((team.game_wins / team.games_played) * 100)
             : 0,
+        blue_games_played: team.blue_games_played,
+        blue_wins: team.blue_wins,
         blue_win_rate_pct: blueWinRate,
+        red_games_played: team.red_games_played,
+        red_wins: team.red_wins,
         red_win_rate_pct: redWinRate,
         side_delta_pct: sideDelta,
-        first_pick_win_rate_pct: pct(
-          team.first_pick_wins,
-          team.first_pick_games_played,
-        ),
-        second_pick_win_rate_pct: pct(
-          team.second_pick_wins,
-          team.second_pick_games_played,
-        ),
+        first_pick_games_played: team.first_pick_games_played,
+        first_pick_wins: team.first_pick_wins,
+        first_pick_win_rate_pct: firstPickWinRate,
+        second_pick_games_played: team.second_pick_games_played,
+        second_pick_wins: team.second_pick_wins,
+        second_pick_win_rate_pct: secondPickWinRate,
+        pick_delta_pct: pickDelta,
+        avg_total_gold:
+          team.games_played > 0
+            ? round(accumulator.total_gold_sum / team.games_played, 0)
+            : 0,
+        avg_elemental_dragons:
+          team.games_played > 0
+            ? round(accumulator.elemental_dragons_sum / team.games_played)
+            : 0,
+        avg_grubs:
+          team.games_played > 0
+            ? round(accumulator.grubs_sum / team.games_played)
+            : 0,
+        avg_barons:
+          team.games_played > 0
+            ? round(accumulator.barons_sum / team.games_played)
+            : 0,
+        avg_towers:
+          team.games_played > 0
+            ? round(accumulator.towers_sum / team.games_played)
+            : 0,
+        first_tower_pct: pct(accumulator.first_towers, team.games_played),
+        first_blood_pct: pct(accumulator.first_bloods, team.games_played),
       }
     })
     .sort((a, b) => {
@@ -2355,6 +2636,236 @@ export async function getTeamPageSideProfiles(
     default:
       return getTeamSideProfiles(splitKey)
   }
+}
+
+function objectiveControlScore(row: RawTeamProfileSide) {
+  return (
+    elementalDragonCount(row) +
+    toNumber(row.barons) * 2 +
+    toNumber(row.void_grubs) * 0.25
+  )
+}
+
+export async function getTeamSignalContexts(
+  splitKey = DEFAULT_SPLIT_KEY,
+): Promise<TeamSignalContext[]> {
+  const gameIds = (await getGameIdsForTeamSplitScope(splitKey)) ?? []
+  if (gameIds.length === 0) return []
+
+  const [gameRows, sideRows, playerRows, timelineByPlayerGame] =
+    await Promise.all([
+      fetchRowsByGameIds<RawHomeGame>(
+        'games',
+        'game_id, split, playoffs, game_date, game_number',
+        gameIds,
+        ['game_date', 'game_number'],
+      ),
+      getTeamSidesForGames(gameIds),
+      fetchRowsByGameIds<RawSignalPlayerGame>(
+        'game_player_stats',
+        'game_id, player_id, team_id',
+        gameIds,
+        ['game_id', 'team_id', 'player_id'],
+      ),
+      getTimeline15ByPlayerGame(gameIds),
+    ])
+  const gameIdSet = new Set(gameIds)
+  const games = gameRows.filter((game) => gameIdSet.has(game.game_id))
+  const series = buildSeries(games, sideRows)
+  const sidesByGame = new Map<string, RawTeamProfileSide[]>()
+  const gd15ByGameTeam = new Map<string, number>()
+
+  for (const side of sideRows) {
+    const current = sidesByGame.get(side.game_id) ?? []
+    current.push(side)
+    sidesByGame.set(side.game_id, current)
+  }
+
+  for (const row of playerRows) {
+    const timeline = timelineByPlayerGame.get(`${row.game_id}:${row.player_id}`)
+    const key = `${row.game_id}:${row.team_id}`
+
+    gd15ByGameTeam.set(
+      key,
+      (gd15ByGameTeam.get(key) ?? 0) + toNumber(timeline?.gold_diff ?? 0),
+    )
+  }
+
+  type RecentGame = {
+    game_date: string
+    game_number: number
+    result: boolean
+  }
+  type OpponentAccumulator = {
+    opponent: string
+    matchWins: number
+    matchLosses: number
+    gameWins: number
+    gameLosses: number
+    games: number
+    goldDiffSum: number
+    gd15Sum: number
+    objectiveControlDeltaSum: number
+    opponentFirstTowers: number
+    opponentFirstBloods: number
+  }
+
+  const recentByTeam = new Map<string, RecentGame[]>()
+  const opponentsByTeam = new Map<string, Map<string, OpponentAccumulator>>()
+
+  function ensureOpponent(team: string, opponent: string) {
+    const teamOpponents = opponentsByTeam.get(team) ?? new Map()
+    const current =
+      teamOpponents.get(opponent) ??
+      ({
+        opponent,
+        matchWins: 0,
+        matchLosses: 0,
+        gameWins: 0,
+        gameLosses: 0,
+        games: 0,
+        goldDiffSum: 0,
+        gd15Sum: 0,
+        objectiveControlDeltaSum: 0,
+        opponentFirstTowers: 0,
+        opponentFirstBloods: 0,
+      } satisfies OpponentAccumulator)
+
+    teamOpponents.set(opponent, current)
+    opponentsByTeam.set(team, teamOpponents)
+    return current
+  }
+
+  for (const game of games) {
+    const sides = sidesByGame.get(game.game_id) ?? []
+
+    for (const side of sides) {
+      const teamName = normalizeTeam(side.teams)?.name
+      if (!teamName) continue
+
+      const team = displayTeamName(teamName)
+      const current = recentByTeam.get(team) ?? []
+
+      current.push({
+        game_date: game.game_date,
+        game_number: toNumber(game.game_number),
+        result: side.result,
+      })
+      recentByTeam.set(team, current)
+    }
+  }
+
+  for (const match of series) {
+    const teamA = displayTeamName(match.teamA)
+    const teamB = displayTeamName(match.teamB)
+    const teamAWon = match.scoreA > match.scoreB
+    const teamBWon = match.scoreB > match.scoreA
+    const teamARecord = ensureOpponent(teamA, teamB)
+    const teamBRecord = ensureOpponent(teamB, teamA)
+
+    teamARecord.matchWins += teamAWon ? 1 : 0
+    teamARecord.matchLosses += teamBWon ? 1 : 0
+    teamARecord.gameWins += match.scoreA
+    teamARecord.gameLosses += match.scoreB
+
+    teamBRecord.matchWins += teamBWon ? 1 : 0
+    teamBRecord.matchLosses += teamAWon ? 1 : 0
+    teamBRecord.gameWins += match.scoreB
+    teamBRecord.gameLosses += match.scoreA
+  }
+
+  for (const sides of sidesByGame.values()) {
+    if (sides.length !== 2) continue
+
+    for (const side of sides) {
+      const opponent = sides.find((candidate) => candidate.team_id !== side.team_id)
+      const teamName = normalizeTeam(side.teams)?.name
+      const opponentName = normalizeTeam(opponent?.teams ?? null)?.name
+
+      if (!opponent || !teamName || !opponentName) continue
+
+      const team = displayTeamName(teamName)
+      const opponentTeam = displayTeamName(opponentName)
+      const accumulator = ensureOpponent(team, opponentTeam)
+      const teamGd15 = gd15ByGameTeam.get(`${side.game_id}:${side.team_id}`) ?? 0
+      const opponentGd15 =
+        gd15ByGameTeam.get(`${opponent.game_id}:${opponent.team_id}`) ?? 0
+
+      accumulator.games += 1
+      accumulator.goldDiffSum +=
+        toNumber(side.total_gold) - toNumber(opponent.total_gold)
+      accumulator.gd15Sum += teamGd15 - opponentGd15
+      accumulator.objectiveControlDeltaSum +=
+        objectiveControlScore(side) - objectiveControlScore(opponent)
+      accumulator.opponentFirstTowers += opponent.first_tower ? 1 : 0
+      accumulator.opponentFirstBloods += opponent.first_blood ? 1 : 0
+    }
+  }
+
+  const teams = new Set([...recentByTeam.keys(), ...opponentsByTeam.keys()])
+
+  return [...teams].map((team) => {
+    const recentGames = (recentByTeam.get(team) ?? [])
+      .sort((a, b) => {
+        const dateDelta = b.game_date.localeCompare(a.game_date)
+        if (dateDelta !== 0) return dateDelta
+        return b.game_number - a.game_number
+      })
+      .slice(0, 10)
+    const recentWins = recentGames.filter((game) => game.result).length
+    const hardestOpponent = [...(opponentsByTeam.get(team)?.values() ?? [])]
+      .filter((opponent) => opponent.games > 0)
+      .sort((a, b) => {
+        if (b.matchLosses !== a.matchLosses) {
+          return b.matchLosses - a.matchLosses
+        }
+        if (b.gameLosses !== a.gameLosses) return b.gameLosses - a.gameLosses
+
+        const aWinRate = pct(a.gameWins, a.games)
+        const bWinRate = pct(b.gameWins, b.games)
+        if (aWinRate !== bWinRate) return aWinRate - bWinRate
+
+        const goldDelta =
+          a.goldDiffSum / Math.max(a.games, 1) -
+          b.goldDiffSum / Math.max(b.games, 1)
+        if (goldDelta !== 0) return goldDelta
+
+        return a.opponent.localeCompare(b.opponent)
+      })[0]
+
+    return {
+      team,
+      recent: {
+        games: recentGames.length,
+        wins: recentWins,
+        win_rate_pct: pct(recentWins, recentGames.length),
+      },
+      hardestOpponent: hardestOpponent
+        ? {
+            opponent: hardestOpponent.opponent,
+            match_wins: hardestOpponent.matchWins,
+            match_losses: hardestOpponent.matchLosses,
+            game_wins: hardestOpponent.gameWins,
+            game_losses: hardestOpponent.gameLosses,
+            avg_gold_diff: Math.round(
+              hardestOpponent.goldDiffSum / hardestOpponent.games,
+            ),
+            avg_gd15: Math.round(hardestOpponent.gd15Sum / hardestOpponent.games),
+            objective_control_delta: round(
+              hardestOpponent.objectiveControlDeltaSum / hardestOpponent.games,
+            ),
+            opponent_first_tower_pct: pct(
+              hardestOpponent.opponentFirstTowers,
+              hardestOpponent.games,
+            ),
+            opponent_first_blood_pct: pct(
+              hardestOpponent.opponentFirstBloods,
+              hardestOpponent.games,
+            ),
+          }
+        : undefined,
+    }
+  })
 }
 
 export async function getTeamProgression(

@@ -31,6 +31,35 @@ export interface TeamSideProfile extends TeamStanding {
   second_pick_games_played: number
   second_pick_wins: number
   second_pick_win_rate_pct: number
+  pick_delta_pct: number | null
+  avg_total_gold: number
+  avg_elemental_dragons: number
+  avg_grubs: number
+  avg_barons: number
+  avg_towers: number
+  first_tower_pct: number
+  first_blood_pct: number
+}
+
+export interface TeamSignalContext {
+  team: string
+  recent: {
+    games: number
+    wins: number
+    win_rate_pct: number
+  }
+  hardestOpponent?: {
+    opponent: string
+    match_wins: number
+    match_losses: number
+    game_wins: number
+    game_losses: number
+    avg_gold_diff: number
+    avg_gd15: number
+    objective_control_delta: number
+    opponent_first_tower_pct: number
+    opponent_first_blood_pct: number
+  }
 }
 
 export interface TeamProgressPoint {
@@ -119,6 +148,17 @@ export interface ChampionProfile {
   roles: string
 }
 
+export interface DraftPressureTarget {
+  champion: string
+  team: string
+  bans_against: number
+  total_bans: number
+  player?: string
+  player_position?: PlayerRole
+  player_games?: number
+  player_win_rate_pct?: number
+}
+
 export interface PlayerChampionMatchupProfile {
   id: string
   player_id: string
@@ -170,6 +210,13 @@ export interface ObjectiveWinRateSummary {
   win_rate_pct: number
 }
 
+export interface ObjectiveConversionDraft {
+  team: string
+  side: 'Blue' | 'Red'
+  bans: string[]
+  picks: string[]
+}
+
 export interface ObjectiveConversionLoss {
   game_id: string
   game_date: string
@@ -179,6 +226,7 @@ export interface ObjectiveConversionLoss {
   elders?: number
   elemental_dragons: number
   barons: number
+  drafts: ObjectiveConversionDraft[]
 }
 
 export interface ObjectiveTeamFlag {

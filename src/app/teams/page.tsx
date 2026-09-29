@@ -27,6 +27,14 @@ function formatRecord(wins: number, games: number) {
   return `${wins}-${games - wins}`;
 }
 
+function formatNumber(value: number) {
+  return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
+function formatStat(value: number) {
+  return value.toFixed(1);
+}
+
 function pickBest(
   teams: TeamSideProfile[],
   key:
@@ -92,6 +100,36 @@ function SideRead({ team }: { team: TeamSideProfile }) {
       {favoredSide} +{Math.abs(team.side_delta_pct).toFixed(1)} pp
     </span>
   );
+}
+
+function PickRead({ team }: { team: TeamSideProfile }) {
+  if (team.pick_delta_pct === null || team.pick_delta_pct === 0) {
+    return <span className="text-ink-muted">Even pick profile</span>;
+  }
+
+  const favoredPick = team.pick_delta_pct > 0 ? "1st pick" : "2nd pick";
+  return (
+    <span className={favoredPick === "1st pick" ? "text-gold" : "text-silver"}>
+      {favoredPick} +{Math.abs(team.pick_delta_pct).toFixed(1)} pp
+    </span>
+  );
+}
+
+function StrongestRead({ team }: { team: TeamSideProfile }) {
+  const sideDelta = team.side_delta_pct;
+  const pickDelta = team.pick_delta_pct;
+  const sideMagnitude = sideDelta === null ? 0 : Math.abs(sideDelta);
+  const pickMagnitude = pickDelta === null ? 0 : Math.abs(pickDelta);
+
+  if (sideMagnitude === 0 && pickMagnitude === 0) {
+    return <span className="text-ink-muted">Even side/pick profile</span>;
+  }
+
+  if (pickMagnitude > sideMagnitude) {
+    return <PickRead team={team} />;
+  }
+
+  return <SideRead team={team} />;
 }
 
 function LeaderStat({
@@ -220,7 +258,7 @@ function TeamCard({
       </div>
 
       <p className="mt-4 border-t border-white/5 pt-3 text-sm">
-        <SideRead team={team} />
+        <StrongestRead team={team} />
       </p>
     </article>
   );
@@ -428,7 +466,7 @@ export default async function TeamsPage({
 
       <section>
         <h2 className="font-display text-lg font-semibold tracking-tight">
-          Teams Summary Table
+          Teams Draft Statistics Table
         </h2>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[1100px] text-sm">
@@ -444,6 +482,7 @@ export default async function TeamsPage({
                 <th className="py-2 text-right font-normal">1st Pick WR</th>
                 <th className="py-2 text-right font-normal">2nd Pick WR</th>
                 <th className="py-2 text-right font-normal">Side Read</th>
+                <th className="py-2 text-right font-normal">Pick Read</th>
               </tr>
             </thead>
             <tbody className="font-stat tabular-nums">
@@ -479,6 +518,66 @@ export default async function TeamsPage({
                   </td>
                   <td className="py-2 text-right">
                     <SideRead team={team} />
+                  </td>
+                  <td className="py-2 text-right">
+                    <PickRead team={team} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          Teams Objectives Statistics Table
+        </h2>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-ink-muted">
+                <th></th>
+                <th className="py-2 font-normal">Team</th>
+                <th className="py-2 text-right font-normal">Avg Total Gold</th>
+                <th className="py-2 text-right font-normal">Avg Dragons</th>
+                <th className="py-2 text-right font-normal">Avg Grubs</th>
+                <th className="py-2 text-right font-normal">Avg Barons</th>
+                <th className="py-2 text-right font-normal">Avg Towers</th>
+                <th className="py-2 text-right font-normal">First Tower %</th>
+                <th className="py-2 text-right font-normal">First Blood %</th>
+              </tr>
+            </thead>
+            <tbody className="font-stat tabular-nums">
+              {teams.map((team, index) => (
+                <tr key={team.team} className="border-b border-white/5">
+                  <td className="w-5 text-ink-muted">{index + 1}</td>
+                  <td
+                    className="asset-bg-name-cell py-2 font-body"
+                    style={teamRowBackgroundStyle(team.team, esportsAssets)}
+                  >
+                    <span className="flex items-center gap-2">{team.team}</span>
+                  </td>
+                  <td className="py-2 text-right text-gold">
+                    {formatNumber(team.avg_total_gold)}
+                  </td>
+                  <td className="py-2 text-right text-dragon">
+                    {formatStat(team.avg_elemental_dragons)}
+                  </td>
+                  <td className="py-2 text-right text-voidgrub">
+                    {formatStat(team.avg_grubs)}
+                  </td>
+                  <td className="py-2 text-right text-baron">
+                    {formatStat(team.avg_barons)}
+                  </td>
+                  <td className="py-2 text-right text-tower">
+                    {formatStat(team.avg_towers)}
+                  </td>
+                  <td className="py-2 text-right text-ink">
+                    {formatPct(team.first_tower_pct)}
+                  </td>
+                  <td className="py-2 text-right text-ink">
+                    {formatPct(team.first_blood_pct)}
                   </td>
                 </tr>
               ))}

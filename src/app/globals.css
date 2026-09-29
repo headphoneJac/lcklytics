@@ -10,6 +10,10 @@
   --color-green: #2fbf71;
   --color-ink: #e6e9ef;
   --color-ink-muted: #8a93a3;
+  --color-tower: #858e8d;
+  --color-voidgrub: #8882cb;
+  --color-baron: #c84eb5;
+  --color-dragon: #bab0d8;
 
   /* These reference the CSS variables next/font injects in layout.tsx */
   --font-display: var(--font-rajdhani), sans-serif;
@@ -51,9 +55,9 @@ body::before {
 
 .asset-bg-name-cell::before {
   background-image: var(--asset-row-image);
-  background-position: left center;
+  background-position: var(--asset-row-position, left center);
   background-repeat: no-repeat;
-  background-size: auto 220%;
+  background-size: var(--asset-row-size, auto 220%);
   content: '';
   inset: 0;
   opacity: 0.375;

@@ -6,8 +6,10 @@ import {
 } from "@/lib/queries";
 import type {
   ChampionProfile,
+  DraftPressureTarget,
   PlayerRole,
   PlayerRoleProfile,
+  TeamSignalContext,
   TeamProgressPoint,
   TeamSideProfile,
 } from "@/lib/types";
@@ -18,6 +20,20 @@ export const DEFAULT_MIN_LEADERBOARD_GAMES = 10;
 export const COMPACT_MIN_LEADERBOARD_GAMES = 5;
 export const ROUNDS_3_4_SPLIT_KEY = "Rounds 3-4";
 export const ALL_SPLITS_PROGRESS_MATCH_END = 188;
+const DEPENDENCY_DELTA_THRESHOLD = 10;
+
+const ROLE_LABELS: Record<PlayerRole, string> = {
+  top: "Top",
+  jng: "Jungle",
+  mid: "Mid",
+  bot: "Bot",
+  sup: "Support",
+};
+
+function formatSignedNumber(value: number) {
+  if (value > 0) return `+${value}`;
+  return String(value);
+}
 
 const ROUNDS_1_2_PLACEMENT_MATCHES = new Set([
   10, 20, 30, 40, 50, 60, 70, 80, 90,
@@ -420,18 +436,15 @@ export function buildPlacementChartProgression(
   return points;
 }
 
-export function buildTeamInsight(teams: TeamSideProfile[]) {
+export function buildTeamInsight(
+  teams: TeamSideProfile[],
+  teamSignalContexts: TeamSignalContext[] = [],
+) {
   const leader = pickLeader(
     teams,
     (team) => team.win_rate_pct,
     (team) => team.games_played,
   );
-  const sideSpecialist = [...teams]
-    .filter((team) => team.side_delta_pct !== null)
-    .sort(
-      (a, b) =>
-        Math.abs(b.side_delta_pct ?? 0) - Math.abs(a.side_delta_pct ?? 0),
-    )[0];
 
   if (!leader) {
     return {
@@ -442,20 +455,140 @@ export function buildTeamInsight(teams: TeamSideProfile[]) {
     };
   }
 
-  const sideRead =
-    sideSpecialist?.side_delta_pct && sideSpecialist.side_delta_pct !== 0
-      ? `${sideSpecialist.team} has the sharpest side split at ${formatDelta(
-          Math.abs(sideSpecialist.side_delta_pct),
+  const sideDelta = leader.side_delta_pct ?? 0;
+  const pickDelta =
+    leader.first_pick_games_played > 0 && leader.second_pick_games_played > 0
+      ? leader.first_pick_win_rate_pct - leader.second_pick_win_rate_pct
+      : 0;
+  const sideDependency =
+    Math.abs(sideDelta) >= DEPENDENCY_DELTA_THRESHOLD
+      ? `${leader.side_delta_pct && leader.side_delta_pct > 0 ? "Blue" : "Red"} side is the only visible caveat at ${formatDelta(
+          Math.abs(sideDelta),
         )}.`
-      : "Side performance is relatively even across the loaded teams.";
+      : null;
+  const pickDependency =
+    Math.abs(pickDelta) >= DEPENDENCY_DELTA_THRESHOLD
+      ? `${pickDelta > 0 ? "First pick" : "Second pick"} is also meaningfully stronger at ${formatDelta(
+          Math.abs(pickDelta),
+        )}.`
+      : null;
+  const dependencyRead =
+    [sideDependency, pickDependency].filter(Boolean).join(" ") ||
+    "Stable across side and pick order.";
+  const context = teamSignalContexts.find((candidate) => candidate.team === leader.team);
+  const recent = context?.recent;
+  const hardestOpponent = context?.hardestOpponent;
 
   return {
     title: `${leader.team} sets the team baseline`,
     body: `${leader.team} leads this scope at ${formatPct(
       leader.win_rate_pct,
-    )} across ${leader.games_played} games. ${sideRead}`,
+    )} across ${leader.games_played} games. ${dependencyRead}`,
     metric: formatPct(leader.win_rate_pct),
     team: leader,
+    recent:
+      recent && recent.games > 0
+        ? {
+            label: "Recent trend",
+            value: `${recent.wins}-${recent.games - recent.wins}`,
+            detail: `Last ${recent.games} games / ${formatPct(
+              recent.win_rate_pct,
+            )}`,
+          }
+        : undefined,
+    hardestOpponent: hardestOpponent
+      ? {
+          opponent: hardestOpponent.opponent,
+          matchRecord: `${hardestOpponent.match_wins}-${hardestOpponent.match_losses}`,
+          gameRecord: `${hardestOpponent.game_wins}-${hardestOpponent.game_losses}`,
+          stats: [
+            {
+              label: "Avg gold",
+              value: formatSignedNumber(hardestOpponent.avg_gold_diff),
+            },
+            {
+              label: "GD@15",
+              value: formatSignedNumber(hardestOpponent.avg_gd15),
+            },
+            {
+              label: "Obj delta",
+              value: formatSignedNumber(hardestOpponent.objective_control_delta),
+            },
+            {
+              label: "Opp first tower",
+              value: formatPct(hardestOpponent.opponent_first_tower_pct),
+            },
+            {
+              label: "Opp first blood",
+              value: formatPct(hardestOpponent.opponent_first_blood_pct),
+            },
+          ],
+        }
+      : undefined,
+  };
+}
+
+function playerArchetype(
+  player: PlayerRoleProfile,
+  qualified: PlayerRoleProfile[],
+) {
+  const rolePeers = qualified.filter((peer) => peer.position === player.position);
+  const roleAvgDpm = average(rolePeers.map((peer) => peer.avg_dpm));
+  const roleAvgGd15 = average(rolePeers.map((peer) => peer.avg_gd15));
+
+  if (player.position === "sup") {
+    return {
+      label: "Vision Engine",
+      detail: "Support value is showing through map control and assist volume.",
+      stats: [
+        { label: "Vision", value: player.avg_vision_score.toFixed(1) },
+        { label: "Assists", value: player.avg_assists.toFixed(1) },
+        { label: "KP", value: formatPct(player.avg_kill_participation_pct) },
+      ],
+    };
+  }
+
+  if (player.position === "jng") {
+    return {
+      label: player.first_blood_pct >= 35 ? "Early Spark" : "Tempo Jungler",
+      detail: "The jungle read leans on early gold and first-blood pressure.",
+      stats: [
+        { label: "GD@15", value: player.avg_gd15.toFixed(0) },
+        { label: "First blood", value: formatPct(player.first_blood_pct) },
+        { label: "DPM", value: String(player.avg_dpm) },
+      ],
+    };
+  }
+
+  const label =
+    player.avg_gd15 - roleAvgGd15 >= 150
+      ? "Lane Bully"
+      : player.avg_damage_share >= 30
+        ? "Damage Carry"
+        : player.kda >= 5
+          ? "Low-Death Stabilizer"
+          : "Carry Profile";
+
+  return {
+    label,
+    detail: `${ROLE_LABELS[player.position]} form is backed by damage and lane pressure indicators.`,
+    stats: [
+      {
+        label: "DPM",
+        value:
+          roleAvgDpm > 0
+            ? `${player.avg_dpm} vs ${Math.round(roleAvgDpm)} avg`
+            : String(player.avg_dpm),
+      },
+      { label: "DMG share", value: formatPct(player.avg_damage_share) },
+      {
+        label: "GD@15",
+        value:
+          roleAvgGd15 !== 0
+            ? `${player.avg_gd15.toFixed(0)} vs ${roleAvgGd15.toFixed(0)} avg`
+            : player.avg_gd15.toFixed(0),
+      },
+    ],
   };
 }
 
@@ -491,6 +624,7 @@ export function buildPlayerInsight(
         0,
       )} GD@15.`
     : "Early-game leader data is still settling.";
+  const archetype = playerArchetype(kdaLeader, qualified);
 
   return {
     title: `${kdaLeader.player} anchors the player board`,
@@ -499,10 +633,38 @@ export function buildPlayerInsight(
     )} KDA over ${kdaLeader.games_played} games. ${laneRead}`,
     metric: kdaLeader.kda.toFixed(2),
     player: kdaLeader,
+    archetype,
   };
 }
 
-export function buildChampionInsight(champions: ChampionProfile[]) {
+function draftDriver(champion: ChampionProfile) {
+  if (champion.bans > champion.picks) {
+    return {
+      label: "Ban-driven",
+      value: `${champion.bans} bans / ${champion.picks} picks`,
+      detail: "Teams are denying it before it becomes a playable option.",
+    };
+  }
+
+  if (champion.picks > champion.bans) {
+    return {
+      label: "Pick-driven",
+      value: `${champion.picks} picks / ${champion.bans} bans`,
+      detail: `${formatPct(champion.win_rate_pct)} win rate when selected.`,
+    };
+  }
+
+  return {
+    label: "Balanced pressure",
+    value: `${champion.picks} picks / ${champion.bans} bans`,
+    detail: `${formatPct(champion.win_rate_pct)} win rate when selected.`,
+  };
+}
+
+export function buildChampionInsight(
+  champions: ChampionProfile[],
+  draftPressureTargets: DraftPressureTarget[] = [],
+) {
   const priorityLeader = pickLeader(
     champions,
     (champion) => champion.presence_rate_pct,
@@ -522,15 +684,48 @@ export function buildChampionInsight(champions: ChampionProfile[]) {
     };
   }
 
+  const focusedPressure =
+    draftPressureTargets.find(
+      (pressure) => pressure.champion === priorityLeader.champion,
+    ) ?? draftPressureTargets[0];
+  const driver = draftDriver(priorityLeader);
+
   return {
     title: `${priorityLeader.champion} is the draft pressure point`,
     body: `${priorityLeader.champion} leads the pool at ${formatPct(
       priorityLeader.presence_rate_pct,
-    )} presence. The top ten champions average ${formatPct(
-      avgPresence,
-    )} presence, with ${pickedChampions.length} champions actually picked.`,
+    )} presence. Top-ten average: ${formatPct(avgPresence)}.`,
     metric: formatPct(priorityLeader.presence_rate_pct),
     champion: priorityLeader,
+    driver,
+    teamPressure: focusedPressure
+      ? {
+          champion: focusedPressure.champion,
+          team: focusedPressure.team,
+          value: `${focusedPressure.bans_against}/${focusedPressure.total_bans} bans`,
+          detail:
+            focusedPressure.player && focusedPressure.player_games
+              ? `${focusedPressure.player}: ${focusedPressure.player_games} games, ${formatPct(
+                  focusedPressure.player_win_rate_pct ?? 0,
+                )} WR`
+              : "Most concentrated team-specific ban signal.",
+        }
+      : undefined,
+    matchupReads: [
+      {
+        label: "Payoff",
+        value:
+          priorityLeader.picks > 0
+            ? `${formatPct(priorityLeader.win_rate_pct)} WR`
+            : "Not picked",
+        detail: `${priorityLeader.picks} picks in the loaded pool.`,
+      },
+      {
+        label: "Role pressure",
+        value: priorityLeader.roles,
+        detail: `${pickedChampions.length} champions have appeared as picks.`,
+      },
+    ],
   };
 }
 
