@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { StatTile } from "@/components/analysis/AnalysisSections";
 import {
@@ -12,9 +12,13 @@ import {
 } from "@/components/analysis/format";
 import ChampionIcon from "@/components/images/ChampionIcon";
 import TeamLogo from "@/components/images/TeamLogo";
-import { playerRowBackgroundStyle } from "@/components/images/row-background";
+import {
+  championSnapshotBackgroundStyle,
+  playerRowBackgroundStyle,
+  teamSnapshotBackgroundStyle,
+} from "@/components/images/row-background";
 import { objectiveLosses } from "@/lib/analysis";
-import { championSplashUrl, type EsportsAssets } from "@/lib/assets";
+import type { EsportsAssets } from "@/lib/assets";
 import type {
   ChampionProfile,
   ObjectiveConversionDraft,
@@ -82,31 +86,61 @@ type ChampionSnapshotInsight = {
 function useRotatingIndex(length: number, intervalMs: number) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  const transitionTo = useCallback(
+    (nextIndex: number | ((current: number) => number)) => {
+      if (length <= 1) return;
+
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current);
+      }
+
+      setIsVisible(false);
+      fadeTimerRef.current = setTimeout(() => {
+        setActiveIndex((current) => {
+          const resolvedIndex =
+            typeof nextIndex === "function" ? nextIndex(current) : nextIndex;
+
+          return ((resolvedIndex % length) + length) % length;
+        });
+        requestAnimationFrame(() => setIsVisible(true));
+      }, FADE_MS);
+    },
+    [length],
+  );
+
+  const showPrevious = useCallback(() => {
+    transitionTo((current) => current - 1);
+  }, [transitionTo]);
+
+  const showNext = useCallback(() => {
+    transitionTo((current) => current + 1);
+  }, [transitionTo]);
 
   useEffect(() => {
     if (length <= 1) return;
 
-    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
-
     const interval = setInterval(() => {
-      setIsVisible(false);
-
-      fadeTimer = setTimeout(() => {
-        setActiveIndex((current) => (current + 1) % length);
-        requestAnimationFrame(() => setIsVisible(true));
-      }, FADE_MS);
+      showNext();
     }, intervalMs);
 
     return () => {
       clearInterval(interval);
+    };
+  }, [intervalMs, length, showNext]);
 
-      if (fadeTimer) {
-        clearTimeout(fadeTimer);
+  useEffect(() => {
+    return () => {
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current);
       }
     };
-  }, [intervalMs, length]);
+  }, []);
 
-  return { activeIndex, isVisible };
+  return { activeIndex, isVisible, showPrevious, showNext };
 }
 
 function PlayerInsightMeta({
@@ -132,6 +166,50 @@ function PlayerInsightMeta({
   );
 }
 
+function SlideControls({
+  label,
+  current,
+  total,
+  onPrevious,
+  onNext,
+}: {
+  label: string;
+  current: number;
+  total: number;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  if (total <= 1) return null;
+
+  return (
+    <div className="flex items-center gap-2">
+      <p className="font-stat text-xs tabular-nums text-ink-muted">
+        {current} / {total}
+      </p>
+      <div className="flex overflow-hidden rounded-md border border-white/10 bg-black/10">
+        <button
+          type="button"
+          aria-label={`Previous ${label}`}
+          title={`Previous ${label}`}
+          onClick={onPrevious}
+          className="grid size-8 place-items-center border-r border-white/10 font-stat text-lg text-ink-muted transition-colors hover:bg-white/10 hover:text-ink focus:bg-white/10 focus:text-ink focus:outline-none"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          aria-label={`Next ${label}`}
+          title={`Next ${label}`}
+          onClick={onNext}
+          className="grid size-8 place-items-center font-stat text-lg text-ink-muted transition-colors hover:bg-white/10 hover:text-ink focus:bg-white/10 focus:text-ink focus:outline-none"
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ObjectiveConversionList({
   title,
   losses,
@@ -143,7 +221,7 @@ function ObjectiveConversionList({
 }) {
   return (
     <div>
-      <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+      <p className="pr-32 font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
         {title}
       </p>
       {losses.length > 0 ? (
@@ -301,7 +379,9 @@ function SnapshotStatBlock({
       <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted">
         {stat.label}
       </p>
-      <p className={`mt-1 truncate font-stat text-sm tabular-nums ${accentClass}`}>
+      <p
+        className={`mt-1 font-stat text-sm leading-5 tabular-nums ${accentClass}`}
+      >
         {stat.value}
       </p>
       {stat.detail ? (
@@ -311,11 +391,7 @@ function SnapshotStatBlock({
   );
 }
 
-function HardestOpponentPanel({
-  insight,
-}: {
-  insight: TeamSnapshotInsight;
-}) {
+function HardestOpponentPanel({ insight }: { insight: TeamSnapshotInsight }) {
   if (!insight.hardestOpponent) return null;
 
   return (
@@ -355,11 +431,7 @@ function HardestOpponentPanel({
   );
 }
 
-function PlayerArchetypePanel({
-  insight,
-}: {
-  insight: PlayerSnapshotInsight;
-}) {
+function PlayerArchetypePanel({ insight }: { insight: PlayerSnapshotInsight }) {
   if (!insight.archetype) return null;
 
   return (
@@ -376,7 +448,7 @@ function PlayerArchetypePanel({
             {insight.archetype.detail}
           </p>
         </div>
-        <div className="grid min-w-[18rem] gap-3 sm:grid-cols-3">
+        <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
           {insight.archetype.stats.map((stat) => (
             <SnapshotStatBlock
               key={stat.label}
@@ -422,7 +494,10 @@ function DraftPressurePanels({
         </div>
       ) : null}
       {insight.matchupReads?.map((stat) => (
-        <div key={stat.label} className="rounded-md border border-white/10 bg-black/10 p-3">
+        <div
+          key={stat.label}
+          className="rounded-md border border-white/10 bg-black/10 p-3"
+        >
           <SnapshotStatBlock stat={stat} />
         </div>
       ))}
@@ -460,9 +535,6 @@ function SnapshotInsightSlide({
         <div className="relative z-10 grid gap-6 lg:grid-cols-[var(--snapshot-player-panel-width)_minmax(0,1fr)] lg:items-center">
           <div className="flex min-h-36 flex-col justify-center border-b border-white/10 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
             <div className="min-w-0">
-              <p className="font-stat text-xs uppercase tracking-[0.2em] text-green">
-                Player Form
-              </p>
               <p className="mt-2 truncate font-display text-3xl font-bold text-ink">
                 {player?.player ?? "TBD"}
               </p>
@@ -480,8 +552,8 @@ function SnapshotInsightSlide({
             </div>
           </div>
           <div>
-            <p className="font-stat text-xs uppercase tracking-[0.2em] text-ink-muted">
-              Featured Read
+            <p className="font-stat text-xs uppercase tracking-[0.2em] text-green">
+              Player Form
             </p>
             <h3 className="mt-2 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
               {playerInsight.title}
@@ -498,43 +570,40 @@ function SnapshotInsightSlide({
 
   if (slide === "champion") {
     return (
-      <article className="relative isolate min-h-[14rem] overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 z-0 w-full bg-cover bg-center opacity-[0.10] lg:w-[18rem]"
-          style={{
-            backgroundImage: `linear-gradient(90deg, rgba(11, 15, 20, 0) 0%, rgba(11, 15, 20, 0.35) 100%), url(${championSplashUrl(
-              champion?.champion ?? "Aatrox",
-            )})`,
-          }}
-        />
-        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+      <article
+        className="asset-bg-snapshot-player relative isolate min-h-[14rem] overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6"
+        style={championSnapshotBackgroundStyle(champion?.champion ?? "Aatrox")}
+      >
+        <div className="relative z-10 grid gap-6 lg:grid-cols-[var(--snapshot-player-panel-width)_minmax(0,1fr)] lg:items-center">
+          <div className="flex min-h-36 flex-col justify-center border-b border-white/10 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+            <div className="min-w-0">
+              <p className="mt-2 truncate font-display text-3xl font-bold text-ink">
+                {champion?.champion ?? "TBD"}
+              </p>
+              <div className="mt-2 text-xs text-ink-muted">
+                <ChampionInsightMeta champion={champion} />
+              </div>
+            </div>
+            <div className="mt-5">
+              <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+                Presence
+              </p>
+              <p className="mt-1 font-stat text-5xl tabular-nums text-red-side">
+                {championInsight.metric}
+              </p>
+            </div>
+          </div>
           <div>
             <p className="font-stat text-xs uppercase tracking-[0.2em] text-red-side">
               Draft Pressure
             </p>
-            <h3 className="mt-3 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
+            <h3 className="mt-2 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
               {championInsight.title}
             </h3>
-            <p className="mt-4 max-w-4xl text-sm leading-7 text-ink-muted">
+            <p className="mt-5 max-w-4xl text-sm leading-7 text-ink-muted">
               {championInsight.body}
             </p>
             <DraftPressurePanels insight={championInsight} />
-          </div>
-          <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            <div className="flex items-center gap-4 lg:justify-end">
-              <div className="lg:text-right">
-                <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
-                  Presence
-                </p>
-                <p className="mt-1 font-stat text-5xl tabular-nums text-red-side">
-                  {championInsight.metric}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 text-xs text-ink-muted lg:text-right">
-              <ChampionInsightMeta champion={champion} />
-            </div>
           </div>
         </div>
       </article>
@@ -542,28 +611,37 @@ function SnapshotInsightSlide({
   }
 
   return (
-    <article className="relative isolate min-h-[14rem] overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-24 -right-14 z-0 opacity-[0.07]"
-      >
-        <TeamLogo
-          team={team?.team ?? "TBD"}
-          assets={assets}
-          className="size-80 rounded"
-          sizes="320px"
-          loading="eager"
-        />
-      </div>
-      <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+    <article
+      className="asset-bg-snapshot-player relative isolate min-h-[14rem] overflow-hidden rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6"
+      style={team ? teamSnapshotBackgroundStyle(team.team, assets) : undefined}
+    >
+      <div className="relative z-10 grid gap-6 lg:grid-cols-[var(--snapshot-player-panel-width)_minmax(0,1fr)] lg:items-center">
+        <div className="flex min-h-36 flex-col justify-center border-b border-white/10 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+          <div className="min-w-0">
+            <p className="mt-2 truncate font-display text-3xl font-bold text-ink">
+              {team?.team ?? "TBD"}
+            </p>
+            <div className="mt-2 text-xs text-ink-muted">
+              <TeamInsightMeta team={team} />
+            </div>
+          </div>
+          <div className="mt-5">
+            <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+              Win Rate
+            </p>
+            <p className="mt-1 font-stat text-5xl tabular-nums text-gold">
+              {teamInsight.metric}
+            </p>
+          </div>
+        </div>
         <div>
           <p className="font-stat text-xs uppercase tracking-[0.2em] text-gold">
             Team Signal
           </p>
-          <h3 className="mt-3 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
+          <h3 className="mt-2 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
             {teamInsight.title}
           </h3>
-          <p className="mt-4 max-w-4xl text-sm leading-7 text-ink-muted">
+          <p className="mt-5 max-w-4xl text-sm leading-7 text-ink-muted">
             {teamInsight.body}
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -577,21 +655,6 @@ function SnapshotInsightSlide({
             ) : null}
           </div>
           <HardestOpponentPanel insight={teamInsight} />
-        </div>
-        <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-          <div className="flex items-center gap-4 lg:justify-end">
-            <div className="lg:text-right">
-              <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
-                Win Rate
-              </p>
-              <p className="mt-1 font-stat text-5xl tabular-nums text-gold">
-                {teamInsight.metric}
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 text-xs text-ink-muted lg:text-right">
-            <TeamInsightMeta team={team} />
-          </div>
         </div>
       </div>
     </article>
@@ -613,8 +676,12 @@ export function NewspaperInsights({
   objectiveInsights: ObjectiveInsightStats;
   assets?: EsportsAssets;
 }) {
-  const { activeIndex: activeSnapshotIndex, isVisible: isSnapshotVisible } =
-    useRotatingIndex(SNAPSHOT_SLIDES.length, SNAPSHOT_ROTATION_MS);
+  const {
+    activeIndex: activeSnapshotIndex,
+    isVisible: isSnapshotVisible,
+    showPrevious: showPreviousSnapshot,
+    showNext: showNextSnapshot,
+  } = useRotatingIndex(SNAPSHOT_SLIDES.length, SNAPSHOT_ROTATION_MS);
   const baronLosses = objectiveLosses(objectiveInsights.baron);
   const soulLosses = objectiveLosses(objectiveInsights.dragonSoul);
   const conversionMisses = baronLosses + soulLosses;
@@ -638,8 +705,12 @@ export function NewspaperInsights({
       emptyText: "No Elder conversion misses in this scope.",
     },
   ];
-  const { activeIndex: activeObjectiveIndex, isVisible: isObjectiveVisible } =
-    useRotatingIndex(objectiveSlides.length, OBJECTIVE_ROTATION_MS);
+  const {
+    activeIndex: activeObjectiveIndex,
+    isVisible: isObjectiveVisible,
+    showPrevious: showPreviousObjective,
+    showNext: showNextObjective,
+  } = useRotatingIndex(objectiveSlides.length, OBJECTIVE_ROTATION_MS);
   const activeSnapshot = SNAPSHOT_SLIDES[activeSnapshotIndex] ?? "team";
   const activeObjective =
     objectiveSlides[activeObjectiveIndex] ?? objectiveSlides[0];
@@ -661,19 +732,30 @@ export function NewspaperInsights({
       </div>
 
       <div className="mt-5 flex flex-col gap-5">
-        <div
-          key={activeSnapshot}
-          className={`transition-opacity duration-[450ms] motion-reduce:transition-none ${
-            isSnapshotVisible ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <SnapshotInsightSlide
-            slide={activeSnapshot}
-            teamInsight={teamInsight}
-            playerInsight={playerInsight}
-            championInsight={championInsight}
-            assets={assets}
-          />
+        <div className="relative">
+          <div className="absolute right-4 top-4 z-20 md:right-5 md:top-5">
+            <SlideControls
+              label="insight slide"
+              current={activeSnapshotIndex + 1}
+              total={SNAPSHOT_SLIDES.length}
+              onPrevious={showPreviousSnapshot}
+              onNext={showNextSnapshot}
+            />
+          </div>
+          <div
+            key={activeSnapshot}
+            className={`transition-opacity duration-[450ms] motion-reduce:transition-none ${
+              isSnapshotVisible ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <SnapshotInsightSlide
+              slide={activeSnapshot}
+              teamInsight={teamInsight}
+              playerInsight={playerInsight}
+              championInsight={championInsight}
+              assets={assets}
+            />
+          </div>
         </div>
 
         <article className="rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
@@ -728,15 +810,19 @@ export function NewspaperInsights({
               />
             </div>
 
-            <div className="mt-6 border-t border-white/10 pt-5">
-              <div className="flex items-start justify-between gap-4">
-                <p className="mt-1 font-stat text-xs tabular-nums text-ink-muted">
-                  {activeObjectiveIndex + 1} / {objectiveSlides.length}
-                </p>
+            <div className="relative mt-6 border-t border-white/10 pt-5">
+              <div className="absolute right-0 top-5 z-20">
+                <SlideControls
+                  label="objective conversion slide"
+                  current={activeObjectiveIndex + 1}
+                  total={objectiveSlides.length}
+                  onPrevious={showPreviousObjective}
+                  onNext={showNextObjective}
+                />
               </div>
               <div
                 key={activeObjective.title}
-                className={`mt-4 min-h-[18rem] transition-opacity duration-[450ms] motion-reduce:transition-none ${
+                className={`min-h-[18rem] transition-opacity duration-[450ms] motion-reduce:transition-none ${
                   isObjectiveVisible ? "opacity-100" : "opacity-0"
                 }`}
               >

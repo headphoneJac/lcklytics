@@ -1,4 +1,3 @@
-import TeamLogo from "@/components/images/TeamLogo";
 import {
   championRowBackgroundStyle,
   teamRowBackgroundStyle,
@@ -285,7 +284,16 @@ export function RolePlayerBoards({
             </p>
           ) : (
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[500px] text-sm">
+              <table className="w-full min-w-[520px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-5" />
+                  <col className="w-[4.5rem]" />
+                  <col className="w-[13rem]" />
+                  <col className="w-14" />
+                  <col className="w-12" />
+                  <col className="w-12" />
+                  <col className="w-16" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-white/10 text-left text-ink-muted">
                     <th></th>
@@ -305,22 +313,13 @@ export function RolePlayerBoards({
                     >
                       <td className="w-5 text-ink-muted">{index + 1}</td>
                       <td className="py-2 font-body">
-                        <span className="flex items-center gap-2">
-                          {player.player}
-                        </span>
+                        <span className="block truncate">{player.player}</span>
                       </td>
                       <td
                         className="asset-bg-name-cell py-2 font-body"
                         style={teamRowBackgroundStyle(player.team, assets)}
                       >
-                        <span className="flex items-center gap-2">
-                          <TeamLogo
-                            team={player.team}
-                            assets={assets}
-                            className="size-5 rounded-sm"
-                          />
-                          <span>{player.team}</span>
-                        </span>
+                        <span className="block truncate">{player.team}</span>
                       </td>
                       <td className="py-2 text-right">{player.games_played}</td>
                       <td className="py-2 text-right text-gold">

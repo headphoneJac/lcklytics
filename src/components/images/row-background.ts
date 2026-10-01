@@ -11,6 +11,9 @@ type AssetRowBackgroundStyle = CSSProperties & {
   "--asset-row-image"?: string;
   "--asset-row-position"?: string;
   "--asset-row-size"?: string;
+  "--asset-snapshot-position"?: string;
+  "--asset-snapshot-size"?: string;
+  "--asset-snapshot-opacity"?: string;
 };
 
 function assetRowBackgroundStyle(
@@ -18,6 +21,9 @@ function assetRowBackgroundStyle(
   options: {
     position?: string;
     size?: string;
+    snapshotPosition?: string;
+    snapshotSize?: string;
+    snapshotOpacity?: string;
   } = {},
 ): AssetRowBackgroundStyle {
   if (!src) return {};
@@ -26,6 +32,9 @@ function assetRowBackgroundStyle(
     "--asset-row-image": `url(${JSON.stringify(src)})`,
     "--asset-row-position": options.position,
     "--asset-row-size": options.size,
+    "--asset-snapshot-position": options.snapshotPosition,
+    "--asset-snapshot-size": options.snapshotSize,
+    "--asset-snapshot-opacity": options.snapshotOpacity,
   };
 }
 
@@ -38,10 +47,45 @@ export function teamRowBackgroundStyle(
   return assetRowBackgroundStyle(asset.logoUrl ?? asset.altLogoUrl);
 }
 
+export function teamSnapshotBackgroundStyle(
+  team: string,
+  assets?: EsportsAssets,
+) {
+  const asset = getTeamAsset(assets, team);
+
+  return assetRowBackgroundStyle(asset.logoUrl ?? asset.altLogoUrl, {
+    snapshotPosition: "center",
+    snapshotSize: "contain",
+    snapshotOpacity: "0.18",
+  });
+}
+
 export function championRowBackgroundStyle(champion: string) {
   return assetRowBackgroundStyle(championSplashUrl(champion), {
     position: "left 10%",
     size: "auto 275%",
+  });
+}
+
+export function championSnapshotBackgroundStyle(champion: string) {
+  if (champion === "Varus") {
+    return assetRowBackgroundStyle(championSplashUrl(champion), {
+    snapshotPosition: "center",
+    snapshotSize: "auto 100%",
+    snapshotOpacity: "0.18",
+  });
+  }
+  if (champion === "Orianna") {
+    return assetRowBackgroundStyle(championSplashUrl(champion), {
+    snapshotPosition: "90% center",
+    snapshotSize: "auto 100%",
+    snapshotOpacity: "0.18",
+  });
+  }
+  return assetRowBackgroundStyle(championSplashUrl(champion), {
+    snapshotPosition: "75% center",
+    snapshotSize: "auto 100%",
+    snapshotOpacity: "0.18",
   });
 }
 

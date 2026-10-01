@@ -2,10 +2,10 @@ import Link from "next/link";
 
 const links = [
   { href: "/", label: "Home" },
+  { href: "/analysis", label: "Analysis" },
   { href: "/teams", label: "Teams" },
   { href: "/players", label: "Players" },
   { href: "/champions", label: "Champions" },
-  { href: "/analysis", label: "Analysis" },
   { href: "/matchups", label: "Matchups" },
 ];
 

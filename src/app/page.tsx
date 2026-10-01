@@ -342,7 +342,7 @@ function Bracket({
           {emptyText}
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-surface/40 p-3">
+        <div className="mt-4 overflow-x-auto rounded-lg border border-white/10 bg-surface/40 p-3">
           <div
             className="relative min-w-max"
             style={{ width: boardWidth, height: boardHeight }}
