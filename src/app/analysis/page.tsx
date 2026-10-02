@@ -360,8 +360,8 @@ export default async function AnalysisPage({
             eyebrow="Teams"
             title={
               progressChartMetric === "gameWinRate"
-                ? "Team Game Win Rate Over Time"
-                : "Team Placement Over Time"
+                ? "Team Game Win Rate Over Matches"
+                : "Team Placement Over Matches"
             }
             description={
               progressChartMetric === "gameWinRate"

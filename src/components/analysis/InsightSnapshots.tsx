@@ -843,7 +843,7 @@ export function NewspaperInsights({
           <h3 className="mt-3 max-w-3xl font-display text-3xl font-bold leading-9 text-ink">
             Who wins without control, and who drops it?
           </h3>
-          <p className="mt-4 max-w-4xl text-sm font-semibold leading-7 text-ink">
+          <p className="mt-4 max-w-4xl text-sm leading-7 text-ink">
             Comeback wins flag games where a team won while the opponent had
             Baron or soul control and they did not. Throw losses flag games
             where a team lost after holding Baron or soul control themselves.
@@ -851,12 +851,12 @@ export function NewspaperInsights({
 
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             <div className="rounded-lg border border-white/10 bg-black/10 p-4">
-              <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+              <p className="font-stat text-xs uppercase tracking-[0.16em] text-green">
                 Comeback Signal
               </p>
               {comebackTeam ? (
                 <>
-                  <p className="mt-2 font-display text-2xl font-bold text-green">
+                  <p className="mt-2 font-display text-2xl font-bold text-ink">
                     {comebackTeam.team}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-ink-muted">
@@ -877,12 +877,12 @@ export function NewspaperInsights({
             </div>
 
             <div className="rounded-lg border border-white/10 bg-black/10 p-4">
-              <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+              <p className="font-stat text-xs uppercase tracking-[0.16em] text-red-side">
                 Throw Watch
               </p>
               {throwTeam ? (
                 <>
-                  <p className="mt-2 font-display text-2xl font-bold text-red-side">
+                  <p className="mt-2 font-display text-2xl font-bold text-ink">
                     {throwTeam.team}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-ink-muted">

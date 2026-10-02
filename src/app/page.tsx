@@ -15,6 +15,11 @@ function record(wins: number, losses: number) {
   return `${wins}-${losses}`;
 }
 
+function gameDifference(wins: number, losses: number) {
+  const diff = wins - losses;
+  return diff > 0 ? `+${diff}` : `${diff}`;
+}
+
 function SectionHeader({
   eyebrow,
   title,
@@ -58,6 +63,7 @@ function StandingsTable({
               <th className="py-2 font-normal">Team</th>
               <th className="py-2 text-right font-normal">Series</th>
               <th className="py-2 text-right font-normal">Games</th>
+              <th className="py-2 text-right font-normal">Game Diff</th>
             </tr>
           </thead>
           <tbody className="font-stat tabular-nums">
@@ -76,6 +82,9 @@ function StandingsTable({
                   </td>
                   <td className="py-2 text-right text-ink">
                     {record(team.game_wins, team.game_losses)}
+                  </td>
+                  <td className="py-2 text-right text-ink">
+                    {gameDifference(team.game_wins, team.game_losses)}
                   </td>
                 </tr>
               );

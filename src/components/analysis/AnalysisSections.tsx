@@ -283,16 +283,16 @@ export function RolePlayerBoards({
               No qualified players in this role for the selected scope.
             </p>
           ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[520px] table-fixed text-sm">
+            <div className="mt-3 overflow-hidden">
+              <table className="w-full table-fixed text-sm">
                 <colgroup>
                   <col className="w-5" />
-                  <col className="w-[4.5rem]" />
-                  <col className="w-[13rem]" />
+                  <col className="w-[4.25rem]" />
+                  <col className="w-[12rem]" />
+                  <col className="w-12" />
+                  <col className="w-10" />
+                  <col className="w-10" />
                   <col className="w-14" />
-                  <col className="w-12" />
-                  <col className="w-12" />
-                  <col className="w-16" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-white/10 text-left text-ink-muted">

@@ -626,7 +626,7 @@ function ChampionPool({
                 <span className="truncate">{pick.champion}</span>
               </p>
               <p className="shrink-0 font-stat tabular-nums text-gold">
-                {pick.pick_rate_pct.toFixed(1)}%
+                {pick.win_rate_pct.toFixed(1)}%
               </p>
             </div>
             <div
@@ -638,7 +638,7 @@ function ChampionPool({
                 className={`h-full rounded-full ${
                   side === "left" ? "bg-blue-side" : "bg-red-side"
                 }`}
-                style={{ width: `${pick.pick_rate_pct}%` }}
+                style={{ width: `${pick.win_rate_pct}%` }}
               />
             </div>
             <p
@@ -646,7 +646,7 @@ function ChampionPool({
                 side === "right" ? "text-right" : ""
               }`}
             >
-              {pick.games_played} games / {pick.win_rate_pct.toFixed(1)}% win
+              {pick.games_played} games / {pick.pick_rate_pct.toFixed(1)}% pick
             </p>
           </div>
         ))}
