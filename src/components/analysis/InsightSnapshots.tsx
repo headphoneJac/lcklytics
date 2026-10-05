@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { StatTile } from "@/components/analysis/AnalysisSections";
 import {
@@ -28,13 +28,15 @@ import type {
   TeamSideProfile,
 } from "@/lib/types";
 
-const SNAPSHOT_ROTATION_MS = 10000;
-const OBJECTIVE_ROTATION_MS = 8000;
-const FADE_MS = 450;
-
 type SnapshotSlide = "team" | "player" | "champion";
+const TAB_FADE_MS = 180;
 
 const SNAPSHOT_SLIDES: SnapshotSlide[] = ["team", "player", "champion"];
+const SNAPSHOT_LABELS: Record<SnapshotSlide, string> = {
+  team: "Team",
+  player: "Player",
+  champion: "Champion",
+};
 
 type InsightStat = {
   label: string;
@@ -83,16 +85,16 @@ type ChampionSnapshotInsight = {
   matchupReads?: InsightStat[];
 };
 
-function useRotatingIndex(length: number, intervalMs: number) {
-  const [activeIndex, setActiveIndex] = useState(0);
+function useFadingValue<T>(initialValue: T) {
+  const [activeValue, setActiveValue] = useState(initialValue);
   const [isVisible, setIsVisible] = useState(true);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
 
-  const transitionTo = useCallback(
-    (nextIndex: number | ((current: number) => number)) => {
-      if (length <= 1) return;
+  const selectValue = useCallback(
+    (nextValue: T) => {
+      if (Object.is(nextValue, activeValue)) return;
 
       if (fadeTimerRef.current) {
         clearTimeout(fadeTimerRef.current);
@@ -100,37 +102,12 @@ function useRotatingIndex(length: number, intervalMs: number) {
 
       setIsVisible(false);
       fadeTimerRef.current = setTimeout(() => {
-        setActiveIndex((current) => {
-          const resolvedIndex =
-            typeof nextIndex === "function" ? nextIndex(current) : nextIndex;
-
-          return ((resolvedIndex % length) + length) % length;
-        });
+        setActiveValue(nextValue);
         requestAnimationFrame(() => setIsVisible(true));
-      }, FADE_MS);
+      }, TAB_FADE_MS);
     },
-    [length],
+    [activeValue],
   );
-
-  const showPrevious = useCallback(() => {
-    transitionTo((current) => current - 1);
-  }, [transitionTo]);
-
-  const showNext = useCallback(() => {
-    transitionTo((current) => current + 1);
-  }, [transitionTo]);
-
-  useEffect(() => {
-    if (length <= 1) return;
-
-    const interval = setInterval(() => {
-      showNext();
-    }, intervalMs);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [intervalMs, length, showNext]);
 
   useEffect(() => {
     return () => {
@@ -140,7 +117,25 @@ function useRotatingIndex(length: number, intervalMs: number) {
     };
   }, []);
 
-  return { activeIndex, isVisible, showPrevious, showNext };
+  return { activeValue, isVisible, selectValue };
+}
+
+function FadingPanel({
+  isVisible,
+  children,
+}: {
+  isVisible: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`transition-opacity duration-[180ms] motion-reduce:transition-none ${
+        isVisible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      {children}
+    </div>
+  );
 }
 
 function PlayerInsightMeta({
@@ -166,45 +161,80 @@ function PlayerInsightMeta({
   );
 }
 
-function SlideControls({
+function SnapshotTabs({
+  activeSlide,
+  onChange,
+}: {
+  activeSlide: SnapshotSlide;
+  onChange: (slide: SnapshotSlide) => void;
+}) {
+  return (
+    <div
+      aria-label="Insight snapshot tabs"
+      className="flex w-full overflow-hidden rounded-md border border-white/10 bg-black/10 sm:w-auto"
+    >
+      {SNAPSHOT_SLIDES.map((slide) => {
+        const isActive = slide === activeSlide;
+
+        return (
+          <button
+            key={slide}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onChange(slide)}
+            className={`flex-1 px-3 py-2 font-stat text-xs uppercase tracking-[0.14em] transition-colors sm:flex-none ${
+              isActive
+                ? "bg-gold text-bg"
+                : "text-ink-muted hover:bg-white/10 hover:text-ink focus:bg-white/10 focus:text-ink focus:outline-none"
+            }`}
+          >
+            {SNAPSHOT_LABELS[slide]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ObjectiveTabs({
   label,
   current,
   total,
-  onPrevious,
-  onNext,
+  onChange,
 }: {
   label: string;
   current: number;
   total: number;
-  onPrevious: () => void;
-  onNext: () => void;
+  onChange: (index: number) => void;
 }) {
   if (total <= 1) return null;
 
   return (
-    <div className="flex items-center gap-2">
-      <p className="font-stat text-xs tabular-nums text-ink-muted">
-        {current} / {total}
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+        {label}
       </p>
       <div className="flex overflow-hidden rounded-md border border-white/10 bg-black/10">
-        <button
-          type="button"
-          aria-label={`Previous ${label}`}
-          title={`Previous ${label}`}
-          onClick={onPrevious}
-          className="grid size-8 place-items-center border-r border-white/10 font-stat text-lg text-ink-muted transition-colors hover:bg-white/10 hover:text-ink focus:bg-white/10 focus:text-ink focus:outline-none"
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          aria-label={`Next ${label}`}
-          title={`Next ${label}`}
-          onClick={onNext}
-          className="grid size-8 place-items-center font-stat text-lg text-ink-muted transition-colors hover:bg-white/10 hover:text-ink focus:bg-white/10 focus:text-ink focus:outline-none"
-        >
-          ›
-        </button>
+        {Array.from({ length: total }, (_, index) => {
+          const isActive = index + 1 === current;
+
+          return (
+            <button
+              key={index}
+              type="button"
+              aria-label={`${label} ${index + 1}`}
+              aria-pressed={isActive}
+              onClick={() => onChange(index)}
+              className={`grid size-8 place-items-center border-r border-white/10 font-stat text-xs last:border-r-0 ${
+                isActive
+                  ? "bg-blue-side text-bg"
+                  : "text-ink-muted transition-colors hover:bg-white/10 hover:text-ink focus:bg-white/10 focus:text-ink focus:outline-none"
+              }`}
+            >
+              {index + 1}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -221,7 +251,7 @@ function ObjectiveConversionList({
 }) {
   return (
     <div>
-      <p className="pr-32 font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
+      <p className="font-stat text-xs uppercase tracking-[0.16em] text-ink-muted">
         {title}
       </p>
       {losses.length > 0 ? (
@@ -677,11 +707,10 @@ export function NewspaperInsights({
   assets?: EsportsAssets;
 }) {
   const {
-    activeIndex: activeSnapshotIndex,
+    activeValue: activeSnapshot,
     isVisible: isSnapshotVisible,
-    showPrevious: showPreviousSnapshot,
-    showNext: showNextSnapshot,
-  } = useRotatingIndex(SNAPSHOT_SLIDES.length, SNAPSHOT_ROTATION_MS);
+    selectValue: selectSnapshot,
+  } = useFadingValue<SnapshotSlide>("team");
   const baronLosses = objectiveLosses(objectiveInsights.baron);
   const soulLosses = objectiveLosses(objectiveInsights.dragonSoul);
   const conversionMisses = baronLosses + soulLosses;
@@ -706,12 +735,10 @@ export function NewspaperInsights({
     },
   ];
   const {
-    activeIndex: activeObjectiveIndex,
+    activeValue: activeObjectiveIndex,
     isVisible: isObjectiveVisible,
-    showPrevious: showPreviousObjective,
-    showNext: showNextObjective,
-  } = useRotatingIndex(objectiveSlides.length, OBJECTIVE_ROTATION_MS);
-  const activeSnapshot = SNAPSHOT_SLIDES[activeSnapshotIndex] ?? "team";
+    selectValue: selectObjectiveIndex,
+  } = useFadingValue(0);
   const activeObjective =
     objectiveSlides[activeObjectiveIndex] ?? objectiveSlides[0];
 
@@ -732,22 +759,14 @@ export function NewspaperInsights({
       </div>
 
       <div className="mt-5 flex flex-col gap-5">
-        <div className="relative">
-          <div className="absolute right-4 top-4 z-20 md:right-5 md:top-5">
-            <SlideControls
-              label="insight slide"
-              current={activeSnapshotIndex + 1}
-              total={SNAPSHOT_SLIDES.length}
-              onPrevious={showPreviousSnapshot}
-              onNext={showNextSnapshot}
+        <div>
+          <div className="mb-3 flex justify-end">
+            <SnapshotTabs
+              activeSlide={activeSnapshot}
+              onChange={selectSnapshot}
             />
           </div>
-          <div
-            key={activeSnapshot}
-            className={`transition-opacity duration-[450ms] motion-reduce:transition-none ${
-              isSnapshotVisible ? "opacity-100" : "opacity-0"
-            }`}
-          >
+          <FadingPanel isVisible={isSnapshotVisible}>
             <SnapshotInsightSlide
               slide={activeSnapshot}
               teamInsight={teamInsight}
@@ -755,7 +774,7 @@ export function NewspaperInsights({
               championInsight={championInsight}
               assets={assets}
             />
-          </div>
+          </FadingPanel>
         </div>
 
         <article className="rounded-lg border border-white/10 bg-surface/50 p-5 md:p-6">
@@ -810,27 +829,23 @@ export function NewspaperInsights({
               />
             </div>
 
-            <div className="relative mt-6 border-t border-white/10 pt-5">
-              <div className="absolute right-0 top-5 z-20">
-                <SlideControls
-                  label="objective conversion slide"
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-4">
+                <ObjectiveTabs
+                  label="Objective conversion view"
                   current={activeObjectiveIndex + 1}
                   total={objectiveSlides.length}
-                  onPrevious={showPreviousObjective}
-                  onNext={showNextObjective}
+                  onChange={selectObjectiveIndex}
                 />
               </div>
-              <div
-                key={activeObjective.title}
-                className={`min-h-[18rem] transition-opacity duration-[450ms] motion-reduce:transition-none ${
-                  isObjectiveVisible ? "opacity-100" : "opacity-0"
-                }`}
-              >
-                <ObjectiveConversionList
-                  title={activeObjective.title}
-                  losses={activeObjective.losses}
-                  emptyText={activeObjective.emptyText}
-                />
+              <div className="min-h-[18rem]">
+                <FadingPanel isVisible={isObjectiveVisible}>
+                  <ObjectiveConversionList
+                    title={activeObjective.title}
+                    losses={activeObjective.losses}
+                    emptyText={activeObjective.emptyText}
+                  />
+                </FadingPanel>
               </div>
             </div>
           </div>

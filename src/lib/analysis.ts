@@ -72,6 +72,53 @@ export type AggregateWinRate = {
   barClass: string;
 };
 
+export type TeamFormMover = {
+  team: string;
+  recentGames: number;
+  recentWins: number;
+  recentWinRatePct: number;
+  overallGames: number;
+  overallWinRatePct: number;
+  deltaPct: number;
+};
+
+export type TeamFormMovers = {
+  risers: TeamFormMover[];
+  fallers: TeamFormMover[];
+  steady: TeamFormMover[];
+};
+
+export type ObjectiveIdentityLeader = {
+  team: string;
+  value: string;
+  detail: string;
+  sortValue: number;
+};
+
+export type ObjectiveIdentityRanking = {
+  title: string;
+  description: string;
+  accentClass: string;
+  leaders: ObjectiveIdentityLeader[];
+};
+
+export type DraftPayoffChampion = {
+  champion: string;
+  presenceRatePct: number;
+  winRatePct: number;
+  picks: number;
+  bans: number;
+  roles: string;
+  detail: string;
+};
+
+export type DraftPayoffQuadrants = {
+  highPressureHighPayoff: DraftPayoffChampion[];
+  highPressureLowPayoff: DraftPayoffChampion[];
+  lowPressureHighPayoff: DraftPayoffChampion[];
+  banTraps: DraftPayoffChampion[];
+};
+
 function winRate(wins: number, games: number) {
   return games > 0 ? (wins / games) * 100 : 0;
 }
@@ -83,6 +130,10 @@ function roundedWinRate(wins: number, games: number) {
 function average(values: number[]) {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function formatWholeNumber(value: number) {
+  return Math.round(value).toLocaleString("en-US");
 }
 
 export function objectiveLosses(summary: { games: number; wins: number }) {
@@ -184,6 +235,223 @@ export function sortTeamsByMatchRecord(teams: TeamSideProfile[]) {
 
     return a.team.localeCompare(b.team);
   });
+}
+
+export function buildTeamFormMovers(
+  teams: TeamSideProfile[],
+  teamSignalContexts: TeamSignalContext[] = [],
+): TeamFormMovers {
+  const teamsByName = new Map(teams.map((team) => [team.team, team]));
+  const movers = teamSignalContexts
+    .map((context) => {
+      const team = teamsByName.get(context.team);
+      const recent = context.recent;
+
+      if (!team || recent.games === 0) return null;
+
+      return {
+        team: team.team,
+        recentGames: recent.games,
+        recentWins: recent.wins,
+        recentWinRatePct: recent.win_rate_pct,
+        overallGames: team.games_played,
+        overallWinRatePct: team.win_rate_pct,
+        deltaPct: Number((recent.win_rate_pct - team.win_rate_pct).toFixed(1)),
+      } satisfies TeamFormMover;
+    })
+    .filter((mover): mover is TeamFormMover => Boolean(mover));
+
+  return {
+    risers: movers
+      .filter((mover) => mover.deltaPct > 0)
+      .sort((a, b) => b.deltaPct - a.deltaPct || b.recentGames - a.recentGames)
+      .slice(0, 4),
+    fallers: movers
+      .filter((mover) => mover.deltaPct < 0)
+      .sort((a, b) => a.deltaPct - b.deltaPct || b.recentGames - a.recentGames)
+      .slice(0, 4),
+    steady: movers
+      .sort(
+        (a, b) =>
+          Math.abs(a.deltaPct) - Math.abs(b.deltaPct) ||
+          b.overallGames - a.overallGames,
+      )
+      .slice(0, 4),
+  };
+}
+
+function objectiveLeader(
+  team: TeamSideProfile,
+  value: string,
+  detail: string,
+  sortValue: number,
+): ObjectiveIdentityLeader {
+  return {
+    team: team.team,
+    value,
+    detail,
+    sortValue,
+  };
+}
+
+function rankedObjectiveLeaders(
+  teams: TeamSideProfile[],
+  buildLeader: (team: TeamSideProfile) => ObjectiveIdentityLeader,
+  limit = 4,
+) {
+  return teams
+    .filter((team) => team.games_played > 0)
+    .map(buildLeader)
+    .sort((a, b) => b.sortValue - a.sortValue || a.team.localeCompare(b.team))
+    .slice(0, limit);
+}
+
+export function buildObjectiveIdentityRankings(
+  teams: TeamSideProfile[],
+): ObjectiveIdentityRanking[] {
+  return [
+    {
+      title: "Economy Pace",
+      description: "Teams generating the most total gold per game.",
+      accentClass: "text-gold",
+      leaders: rankedObjectiveLeaders(teams, (team) =>
+        objectiveLeader(
+          team,
+          formatWholeNumber(team.avg_total_gold),
+          `${formatPct(team.win_rate_pct)} game WR across ${team.games_played} games`,
+          team.avg_total_gold,
+        ),
+      ),
+    },
+    {
+      title: "Early Claims",
+      description: "First tower and first blood pressure blended together.",
+      accentClass: "text-green",
+      leaders: rankedObjectiveLeaders(teams, (team) => {
+        const earlyScore = (team.first_tower_pct + team.first_blood_pct) / 2;
+
+        return objectiveLeader(
+          team,
+          formatPct(earlyScore),
+          `${formatPct(team.first_tower_pct)} FT / ${formatPct(
+            team.first_blood_pct,
+          )} FB`,
+          earlyScore,
+        );
+      }),
+    },
+    {
+      title: "Neutral Control",
+      description: "Dragon, grub, and Baron volume combined into one read.",
+      accentClass: "text-baron",
+      leaders: rankedObjectiveLeaders(teams, (team) => {
+        const controlScore =
+          team.avg_elemental_dragons +
+          team.avg_grubs * 0.25 +
+          team.avg_barons * 2;
+
+        return objectiveLeader(
+          team,
+          controlScore.toFixed(1),
+          `${team.avg_elemental_dragons.toFixed(1)} dragons / ${team.avg_grubs.toFixed(
+            1,
+          )} grubs / ${team.avg_barons.toFixed(1)} Barons`,
+          controlScore,
+        );
+      }),
+    },
+    {
+      title: "Siege Finish",
+      description: "Tower pressure as a proxy for map conversion.",
+      accentClass: "text-tower",
+      leaders: rankedObjectiveLeaders(teams, (team) =>
+        objectiveLeader(
+          team,
+          team.avg_towers.toFixed(1),
+          `${formatPct(team.first_tower_pct)} first tower rate`,
+          team.avg_towers,
+        ),
+      ),
+    },
+  ];
+}
+
+function toDraftPayoffChampion(
+  champion: ChampionProfile,
+): DraftPayoffChampion {
+  return {
+    champion: champion.champion,
+    presenceRatePct: champion.presence_rate_pct,
+    winRatePct: champion.win_rate_pct,
+    picks: champion.picks,
+    bans: champion.bans,
+    roles: champion.roles,
+    detail: `${champion.picks} picks / ${champion.bans} bans`,
+  };
+}
+
+function sortDraftPayoffChampions(
+  champions: ChampionProfile[],
+  getScore: (champion: ChampionProfile) => number,
+  limit = 5,
+) {
+  return champions
+    .sort((a, b) => {
+      const scoreDelta = getScore(b) - getScore(a);
+      if (scoreDelta !== 0) return scoreDelta;
+      if (b.presence_rate_pct !== a.presence_rate_pct) {
+        return b.presence_rate_pct - a.presence_rate_pct;
+      }
+      return a.champion.localeCompare(b.champion);
+    })
+    .slice(0, limit)
+    .map(toDraftPayoffChampion);
+}
+
+export function buildDraftPayoffQuadrants(
+  champions: ChampionProfile[],
+): DraftPayoffQuadrants {
+  const pickedChampions = champions.filter((champion) => champion.picks > 0);
+  const minimumPicks = pickedChampions.length > 0 ? 3 : 0;
+  const highPressureThreshold = 50;
+  const highPayoffThreshold = 52;
+  const lowPayoffThreshold = 48;
+
+  return {
+    highPressureHighPayoff: sortDraftPayoffChampions(
+      pickedChampions.filter(
+        (champion) =>
+          champion.presence_rate_pct >= highPressureThreshold &&
+          champion.win_rate_pct >= highPayoffThreshold,
+      ),
+      (champion) => champion.presence_rate_pct + champion.win_rate_pct,
+    ),
+    highPressureLowPayoff: sortDraftPayoffChampions(
+      pickedChampions.filter(
+        (champion) =>
+          champion.presence_rate_pct >= highPressureThreshold &&
+          champion.win_rate_pct <= lowPayoffThreshold,
+      ),
+      (champion) => champion.presence_rate_pct - champion.win_rate_pct,
+    ),
+    lowPressureHighPayoff: sortDraftPayoffChampions(
+      pickedChampions.filter(
+        (champion) =>
+          champion.presence_rate_pct < highPressureThreshold &&
+          champion.picks >= minimumPicks &&
+          champion.win_rate_pct >= 60,
+      ),
+      (champion) => champion.win_rate_pct + champion.picks,
+    ),
+    banTraps: sortDraftPayoffChampions(
+      champions.filter(
+        (champion) =>
+          champion.bans >= Math.max(champion.picks * 1.5, 2) &&
+          champion.presence_rate_pct >= 25,
+      ),
+      (champion) => champion.bans - champion.picks,
+    ),
+  };
 }
 
 export function mergeTeamSideProfiles(

@@ -2,9 +2,12 @@ import SplitSelector from "@/components/SplitSelector";
 import {
   AggregateImpactCard,
   ChampionPressureTable,
+  DraftPayoffQuadrants,
+  ObjectiveIdentityRankings,
   RolePlayerBoards,
   SectionHeader,
   StatTile,
+  TeamFormMovers,
   TeamFormPickOrderTable,
 } from "@/components/analysis/AnalysisSections";
 import { formatPct, formatRecord } from "@/components/analysis/format";
@@ -20,9 +23,12 @@ import {
   ROUNDS_3_4_SPLIT_KEY,
   aggregateSidePickImpact,
   buildChampionInsight,
+  buildDraftPayoffQuadrants,
   buildGroupedProgressionPoints,
+  buildObjectiveIdentityRankings,
   buildPlacementChartProgression,
   buildPlayerInsight,
+  buildTeamFormMovers,
   buildTeamInsight,
   mergeTeamSideProfiles,
   pickLeader,
@@ -100,6 +106,9 @@ export default async function AnalysisPage({
   const playerInsight = buildPlayerInsight(players, minimumPlayerGames);
   const championInsight = buildChampionInsight(champions, draftPressureTargets);
   const sidePickImpact = aggregateSidePickImpact(teams);
+  const teamFormMovers = buildTeamFormMovers(teams, teamSignalContexts);
+  const objectiveIdentityRankings = buildObjectiveIdentityRankings(teams);
+  const draftPayoffQuadrants = buildDraftPayoffQuadrants(champions);
 
   const standingsTeams =
     splitKey === ROUNDS_3_4_SPLIT_KEY
@@ -245,6 +254,27 @@ export default async function AnalysisPage({
             secondary={sidePickImpact.secondPick}
           />
         </div>
+      </section>
+
+      <section className="flex flex-col gap-5">
+        <SectionHeader
+          eyebrow="Teams"
+          title="Team Form Risers And Fallers"
+          description="Recent game form compared against each team's full-scope baseline. Positive deltas point to teams currently running hotter than their season profile."
+        />
+        <TeamFormMovers movers={teamFormMovers} assets={esportsAssets} />
+      </section>
+
+      <section className="flex flex-col gap-5">
+        <SectionHeader
+          eyebrow="Objectives"
+          title="Objective Identity Rankings"
+          description="A quick read on how teams create map pressure: economy pace, early claims, neutral control, and tower conversion."
+        />
+        <ObjectiveIdentityRankings
+          rankings={objectiveIdentityRankings}
+          assets={esportsAssets}
+        />
       </section>
 
       <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
@@ -393,6 +423,15 @@ export default async function AnalysisPage({
           roleGroups={rolePlayerGroups}
           assets={esportsAssets}
         />
+      </section>
+
+      <section className="flex flex-col gap-5">
+        <SectionHeader
+          eyebrow="Champions"
+          title="Draft Payoff Quadrants"
+          description="Separates priority from payoff: which picks deserve their pressure, which are underperforming, and which lower-presence champions are quietly paying off."
+        />
+        <DraftPayoffQuadrants quadrants={draftPayoffQuadrants} />
       </section>
 
       <section className="flex flex-col gap-5">
