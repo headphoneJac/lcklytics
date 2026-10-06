@@ -692,14 +692,12 @@ function SnapshotInsightSlide({
 }
 
 export function NewspaperInsights({
-  currentSplit,
   teamInsight,
   playerInsight,
   championInsight,
   objectiveInsights,
   assets,
 }: {
-  currentSplit: string;
   teamInsight: TeamSnapshotInsight;
   playerInsight: PlayerSnapshotInsight;
   championInsight: ChampionSnapshotInsight;
@@ -753,9 +751,6 @@ export function NewspaperInsights({
             What The Numbers Are Saying
           </h2>
         </div>
-        <p className="font-stat text-xs text-ink-muted">
-          Scope: {currentSplit}
-        </p>
       </div>
 
       <div className="mt-5 flex flex-col gap-5">

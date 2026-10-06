@@ -1,3 +1,4 @@
+import Link from "next/link";
 import TeamLogo from "@/components/images/TeamLogo";
 import { teamRowBackgroundStyle } from "@/components/images/row-background";
 import { getLckEsportsAssets } from "@/lib/esports-assets";
@@ -37,6 +38,89 @@ function SectionHeader({
         <p className="mt-2 max-w-2xl text-sm text-ink-muted">{description}</p>
       ) : null}
     </div>
+  );
+}
+
+function DashboardPillar({
+  eyebrow,
+  description,
+  href,
+}: {
+  eyebrow: string;
+  description: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-lg border border-white/10 bg-surface/40 p-5 transition-colors hover:border-gold/50 hover:bg-surface/70"
+    >
+      <p className="font-stat text-xs uppercase text-gold">{eyebrow}</p>
+      <p className="mt-3 text-sm leading-6 text-ink-muted">{description}</p>
+      <p className="mt-4 font-stat text-xs uppercase text-ink-muted transition-colors group-hover:text-gold">
+        Open view
+      </p>
+    </Link>
+  );
+}
+
+function AnalyticsFrontPage() {
+  return (
+    <section className="flex min-h-[calc(100vh-11rem)] flex-col justify-center gap-10 py-6">
+      <div>
+        <p className="font-stat text-sm uppercase text-gold">LCK 2026</p>
+        <h1 className="mt-3 max-w-4xl font-display text-5xl font-bold tracking-tight text-ink md:text-7xl">
+          Esports analytics for reading the LCK beneath the standings.
+        </h1>
+        <p className="mt-5 max-w-3xl text-base leading-7 text-ink-muted md:text-lg">
+          lcklytics turns Oracle&apos;s Elixir data into practical scouting
+          notes: team form, side and pick-order edges, objective identity,
+          player profiles, champion pressure, and player-champion matchups.
+        </p>
+        <div className="mt-7 flex flex-wrap gap-3">
+          <Link
+            href="/analysis"
+            className="rounded-md bg-gold px-5 py-3 font-stat text-sm uppercase text-bg transition-colors hover:bg-gold/85"
+          >
+            View Analysis
+          </Link>
+          <Link
+            href="/matchups"
+            className="rounded-md border border-white/15 px-5 py-3 font-stat text-sm uppercase text-ink transition-colors hover:border-white/35 hover:bg-white/5"
+          >
+            Explore matchups
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <DashboardPillar
+          eyebrow="Analysis"
+          description="A complete analysis desk for team form, players, champions, objectives, draft order, and side trends."
+          href="/analysis"
+        />
+        <DashboardPillar
+          eyebrow="Teams"
+          description="Team records with side selection, pick-order win rates, objective output, and bracket context."
+          href="/teams"
+        />
+        <DashboardPillar
+          eyebrow="Players"
+          description="Role-specific player form with radar cards, leaderboard notes, and split-aware summaries."
+          href="/players"
+        />
+        <DashboardPillar
+          eyebrow="Champions"
+          description="Pick, ban, presence, and performance tables for every champion seen in the selected scope."
+          href="/champions"
+        />
+        <DashboardPillar
+          eyebrow="Matchups"
+          description="Find which players are winning on specific champions and where small samples deserve inspection."
+          href="/matchups"
+        />
+      </div>
+    </section>
   );
 }
 
@@ -413,12 +497,14 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-14">
-      <section>
+    <div className="flex flex-col gap-16">
+      <AnalyticsFrontPage />
+
+      <section className="border-t border-white/10 pt-14">
         <p className="font-stat text-sm text-ink-muted">LCK 2026</p>
-        <h1 className="font-display text-5xl font-bold text-ink">
+        <h2 className="font-display text-5xl font-bold text-ink">
           Season Overview
-        </h1>
+        </h2>
         <p className="mt-2 max-w-2xl text-ink-muted">
           Domestic LCK format, group placement, carry-over standings, and
           bracket results from the loaded Oracle&apos;s Elixir data.

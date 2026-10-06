@@ -12,7 +12,6 @@ import {
   getTeamSplitOptions,
 } from "@/lib/queries";
 import {
-  getSplitLabel,
   resolveSplitKey,
   type SplitSearchParams,
 } from "@/lib/splits";
@@ -305,7 +304,6 @@ export default async function TeamsPage({
     getTeamBracketSections(splitKey),
     getLckEsportsAssets(),
   ]);
-  const currentSplit = getSplitLabel(splits, splitKey);
   const bestOverall = pickBest(teams, "win_rate_pct", "games_played");
   const bestBlue = pickBest(teams, "blue_win_rate_pct", "blue_games_played");
   const bestRed = pickBest(teams, "red_win_rate_pct", "red_games_played");
@@ -323,13 +321,7 @@ export default async function TeamsPage({
 
   return (
     <div className="flex flex-col gap-10">
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/teams"
-      />
-
-      <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <section className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="font-stat text-sm text-ink-muted">Teams</p>
           <h1 className="font-display text-5xl font-bold tracking-tight text-ink">
@@ -340,9 +332,11 @@ export default async function TeamsPage({
             rates for every team.
           </p>
         </div>
-        <p className="font-stat text-xs text-ink-muted">
-          Scope: {currentSplit}
-        </p>
+        <SplitSelector
+          splits={splits}
+          activeSplitKey={splitKey}
+          basePath="/teams"
+        />
       </section>
 
       <section className="grid grid-cols-1 gap-2 md:grid-cols-3 lg:grid-cols-5">

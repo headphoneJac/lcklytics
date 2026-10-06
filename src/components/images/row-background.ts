@@ -14,6 +14,9 @@ type AssetRowBackgroundStyle = CSSProperties & {
   "--asset-snapshot-position"?: string;
   "--asset-snapshot-size"?: string;
   "--asset-snapshot-opacity"?: string;
+  "--asset-analysis-position"?: string;
+  "--asset-analysis-size"?: string;
+  "--asset-analysis-opacity"?: string;
 };
 
 function assetRowBackgroundStyle(
@@ -24,6 +27,9 @@ function assetRowBackgroundStyle(
     snapshotPosition?: string;
     snapshotSize?: string;
     snapshotOpacity?: string;
+    analysisPosition?: string;
+    analysisSize?: string;
+    analysisOpacity?: string;
   } = {},
 ): AssetRowBackgroundStyle {
   if (!src) return {};
@@ -35,6 +41,9 @@ function assetRowBackgroundStyle(
     "--asset-snapshot-position": options.snapshotPosition,
     "--asset-snapshot-size": options.snapshotSize,
     "--asset-snapshot-opacity": options.snapshotOpacity,
+    "--asset-analysis-position": options.analysisPosition,
+    "--asset-analysis-size": options.analysisSize,
+    "--asset-analysis-opacity": options.analysisOpacity,
   };
 }
 
@@ -60,30 +69,51 @@ export function teamSnapshotBackgroundStyle(
   });
 }
 
+export function teamAnalysisWatermarkStyle(
+  team: string,
+  assets?: EsportsAssets,
+) {
+  const asset = getTeamAsset(assets, team);
+
+  return assetRowBackgroundStyle(asset.logoUrl ?? asset.altLogoUrl, {
+    analysisPosition: "left 15rem center",
+    analysisSize: "auto 170%",
+    analysisOpacity: "0.12",
+  });
+}
+
 export function championRowBackgroundStyle(champion: string) {
   return assetRowBackgroundStyle(championSplashUrl(champion), {
-    position: "left 10%",
-    size: "auto 275%",
+    position: "center 35%",
+    size: "cover",
+  });
+}
+
+export function championAnalysisWatermarkStyle(champion: string) {
+  return assetRowBackgroundStyle(championSplashUrl(champion), {
+    analysisPosition: "left 15rem center",
+    analysisSize: "auto 310%",
+    analysisOpacity: "0.14",
   });
 }
 
 export function championSnapshotBackgroundStyle(champion: string) {
   if (champion === "Varus") {
     return assetRowBackgroundStyle(championSplashUrl(champion), {
-    snapshotPosition: "center",
+    snapshotPosition: "center 35%",
     snapshotSize: "auto 100%",
     snapshotOpacity: "0.18",
   });
   }
   if (champion === "Orianna") {
     return assetRowBackgroundStyle(championSplashUrl(champion), {
-    snapshotPosition: "90% center",
+    snapshotPosition: "90% 35%",
     snapshotSize: "auto 100%",
     snapshotOpacity: "0.18",
   });
   }
   return assetRowBackgroundStyle(championSplashUrl(champion), {
-    snapshotPosition: "75% center",
+    snapshotPosition: "75% 35%",
     snapshotSize: "auto 100%",
     snapshotOpacity: "0.18",
   });

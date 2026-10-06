@@ -49,7 +49,6 @@ import {
   getTeamSplitOptions,
 } from "@/lib/queries";
 import {
-  getSplitLabel,
   resolveSplitKey,
   type SplitSearchParams,
 } from "@/lib/splits";
@@ -94,7 +93,6 @@ export default async function AnalysisPage({
     getLckEsportsAssets(),
   ]);
 
-  const currentSplit = getSplitLabel(splits, splitKey);
   const minimumPlayerGames =
     teams.length > 0 && Math.max(...teams.map((team) => team.games_played)) < 20
       ? COMPACT_MIN_LEADERBOARD_GAMES
@@ -202,13 +200,7 @@ export default async function AnalysisPage({
 
   return (
     <div className="flex flex-col gap-10">
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/analysis"
-      />
-
-      <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <section className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="font-stat text-sm text-ink-muted">Analysis</p>
           <h1 className="font-display text-5xl font-bold tracking-tight text-ink">
@@ -220,13 +212,14 @@ export default async function AnalysisPage({
             for the selected scope.
           </p>
         </div>
-        <p className="font-stat text-xs text-ink-muted">
-          Scope: {currentSplit}
-        </p>
+        <SplitSelector
+          splits={splits}
+          activeSplitKey={splitKey}
+          basePath="/analysis"
+        />
       </section>
 
       <NewspaperInsights
-        currentSplit={currentSplit}
         teamInsight={teamInsight}
         playerInsight={playerInsight}
         championInsight={championInsight}

@@ -9,7 +9,9 @@ import {
 } from "react";
 
 import {
+  championAnalysisWatermarkStyle,
   championRowBackgroundStyle,
+  teamAnalysisWatermarkStyle,
   teamRowBackgroundStyle,
 } from "@/components/images/row-background";
 import type { EsportsAssets } from "@/lib/assets";
@@ -225,6 +227,29 @@ export function AggregateImpactCard({
   );
 }
 
+function CompactMetric({
+  label,
+  value,
+  accentClass = "text-ink",
+  align = "left",
+}: {
+  label: string;
+  value: string;
+  accentClass?: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <div className={align === "right" ? "text-right" : undefined}>
+      <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted md:hidden">
+        {label}
+      </p>
+      <p className={`mt-1 font-stat text-sm tabular-nums ${accentClass}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function TeamMovementRow({
   mover,
   rank,
@@ -244,44 +269,30 @@ function TeamMovementRow({
     mover.deltaPct === 0 ? "Even" : formatDelta(mover.deltaPct);
 
   return (
-    <div className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 border-b border-white/5 py-3 last:border-b-0 md:grid-cols-[1.5rem_minmax(0,1fr)_minmax(18rem,0.9fr)] md:items-center">
+    <div
+      className="asset-bg-analysis-row grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 rounded-md border border-white/5 bg-black/10 px-3 py-3 md:grid-cols-[1.5rem_minmax(10rem,1fr)_8rem_7rem_7rem_7rem] md:items-center"
+      style={teamAnalysisWatermarkStyle(mover.team, assets)}
+    >
       <p className="font-stat text-sm text-ink-muted">{rank}</p>
-      <div
-        className="asset-bg-name-cell min-w-0 py-1 font-body"
-        style={teamRowBackgroundStyle(mover.team, assets)}
-      >
+      <div className="min-w-0 font-body">
         <p className="truncate text-sm font-semibold text-ink">{mover.team}</p>
-        <p className="mt-1 text-xs text-ink-muted">
-          {formatRecord(mover.recentWins, mover.recentGames)} recent over{" "}
-          {mover.recentGames} games
-        </p>
       </div>
-      <div className="col-start-2 grid grid-cols-3 gap-3 md:col-start-auto">
-        <div>
-          <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-            Recent
-          </p>
-          <p className="mt-1 font-stat text-sm tabular-nums text-ink">
-            {formatPct(mover.recentWinRatePct)}
-          </p>
-        </div>
-        <div>
-          <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-            Overall
-          </p>
-          <p className="mt-1 font-stat text-sm tabular-nums text-ink-muted">
-            {formatPct(mover.overallWinRatePct)}
-          </p>
-        </div>
-        <div>
-          <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted">
-            Delta
-          </p>
-          <p className={`mt-1 font-stat text-sm tabular-nums ${deltaClass}`}>
-            {deltaLabel}
-          </p>
-        </div>
-      </div>
+      <CompactMetric
+        label="Record"
+        value={formatRecord(mover.recentWins, mover.recentGames)}
+        accentClass="text-ink"
+      />
+      <CompactMetric
+        label="Recent"
+        value={formatPct(mover.recentWinRatePct)}
+        accentClass="text-ink"
+      />
+      <CompactMetric
+        label="Overall"
+        value={formatPct(mover.overallWinRatePct)}
+        accentClass="text-ink-muted"
+      />
+      <CompactMetric label="Delta" value={deltaLabel} accentClass={deltaClass} />
     </div>
   );
 }
@@ -350,7 +361,15 @@ function TeamMovementPanel({
         </p>
       </div>
       {movers.length > 0 ? (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="hidden grid-cols-[1.5rem_minmax(10rem,1fr)_8rem_7rem_7rem_7rem] gap-3 px-3 text-sm text-ink-muted md:grid">
+            <span></span>
+            <span>Team</span>
+            <span>Record</span>
+            <span>Recent</span>
+            <span>Overall</span>
+            <span>Delta</span>
+          </div>
           {movers.map((mover, index) => (
             <TeamMovementRow
               key={mover.team}
@@ -391,28 +410,32 @@ function ObjectiveRankingPanel({
           Top {ranking.leaders.length}
         </p>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 flex flex-col gap-2">
+        <div className="hidden grid-cols-[1.5rem_minmax(10rem,1fr)_minmax(14rem,1.2fr)_7rem] gap-3 px-3 text-sm text-ink-muted md:grid">
+          <span></span>
+          <span>Team</span>
+          <span>Context</span>
+          <span className="text-right">Value</span>
+        </div>
         {ranking.leaders.map((leader, index) => (
           <div
             key={`${ranking.title}-${leader.team}`}
-            className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-white/10 bg-black/10 p-3"
+            className="asset-bg-analysis-row grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 rounded-md border border-white/10 bg-black/10 p-3 md:grid-cols-[1.5rem_minmax(10rem,1fr)_minmax(14rem,1.2fr)_7rem] md:items-center"
+            style={teamAnalysisWatermarkStyle(leader.team, assets)}
           >
             <span className="font-stat text-sm text-ink-muted">
               {index + 1}
             </span>
-            <div
-              className="asset-bg-name-cell min-w-0 py-1 font-body"
-              style={teamRowBackgroundStyle(leader.team, assets)}
-            >
+            <div className="min-w-0 font-body">
               <p className="truncate text-sm font-semibold text-ink">
                 {leader.team}
               </p>
-              <p className="truncate text-xs text-ink-muted">
-                {leader.detail}
-              </p>
             </div>
+            <p className="col-start-2 truncate text-sm text-ink-muted md:col-start-auto">
+              {leader.detail}
+            </p>
             <p
-              className={`font-stat text-sm tabular-nums ${ranking.accentClass}`}
+              className={`col-start-2 font-stat text-sm tabular-nums md:col-start-auto md:text-right ${ranking.accentClass}`}
             >
               {leader.value}
             </p>
@@ -433,45 +456,38 @@ function DraftPayoffRow({
   const sampleClass = champion.picks >= 5 ? "text-green" : "text-ink-muted";
 
   return (
-    <div className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 border-b border-white/5 py-3 last:border-b-0 md:grid-cols-[1.5rem_minmax(0,1fr)_repeat(3,6rem)] md:items-center">
+    <div
+      className="asset-bg-analysis-row asset-bg-champion-analysis-row grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 rounded-md border border-white/5 bg-black/10 px-3 py-3 md:grid-cols-[1.5rem_minmax(10rem,1fr)_8rem_9rem_6rem_6rem_6rem] md:items-center"
+      style={championAnalysisWatermarkStyle(champion.champion)}
+    >
       <p className="font-stat text-sm text-ink-muted">{rank}</p>
-      <div
-        className="asset-bg-name-cell min-w-0 py-1 font-body"
-        style={championRowBackgroundStyle(champion.champion)}
-      >
+      <div className="min-w-0 font-body">
         <p className="truncate text-sm font-semibold text-ink">
           {champion.champion}
         </p>
-        <p className="truncate text-xs text-ink-muted">
-          {champion.roles} / {champion.detail}
-        </p>
       </div>
-      <div className="col-start-2 grid grid-cols-3 gap-3 md:col-start-auto md:contents">
-        <div>
-          <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted md:hidden">
-            Presence
-          </p>
-          <p className="font-stat text-sm tabular-nums text-gold md:text-right">
-            {formatPct(champion.presenceRatePct)}
-          </p>
-        </div>
-        <div>
-          <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted md:hidden">
-            Win
-          </p>
-          <p className="font-stat text-sm tabular-nums text-ink-muted md:text-right">
-            {formatPct(champion.winRatePct)}
-          </p>
-        </div>
-        <div>
-          <p className="font-stat text-[10px] uppercase tracking-[0.14em] text-ink-muted md:hidden">
-            Sample
-          </p>
-          <p className={`font-stat text-sm tabular-nums md:text-right ${sampleClass}`}>
-            {champion.picks}P
-          </p>
-        </div>
-      </div>
+      <p className="col-start-2 truncate text-sm text-ink-muted md:col-start-auto">
+        {champion.roles}
+      </p>
+      <CompactMetric label="Draft" value={champion.detail} />
+      <CompactMetric
+        label="Presence"
+        value={formatPct(champion.presenceRatePct)}
+        accentClass="text-gold"
+        align="right"
+      />
+      <CompactMetric
+        label="Win"
+        value={formatPct(champion.winRatePct)}
+        accentClass="text-ink-muted"
+        align="right"
+      />
+      <CompactMetric
+        label="Sample"
+        value={`${champion.picks}P`}
+        accentClass={sampleClass}
+        align="right"
+      />
     </div>
   );
 }
@@ -505,10 +521,12 @@ function DraftPayoffPanel({
         </p>
       </div>
       {champions.length > 0 ? (
-        <div className="mt-4">
-          <div className="hidden grid-cols-[1.5rem_minmax(0,1fr)_repeat(3,6rem)] gap-3 border-b border-white/10 pb-2 text-sm text-ink-muted md:grid">
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="hidden grid-cols-[1.5rem_minmax(10rem,1fr)_8rem_9rem_6rem_6rem_6rem] gap-3 px-3 text-sm text-ink-muted md:grid">
             <span></span>
             <span>Champion</span>
+            <span>Roles</span>
+            <span>Draft</span>
             <span className="text-right">Presence</span>
             <span className="text-right">Win%</span>
             <span className="text-right">Sample</span>
@@ -921,7 +939,7 @@ export function ChampionPressureTable({
             <tr key={champion.champion} className="border-b border-white/5">
               <td className="w-5 text-ink-muted">{index + 1}</td>
               <td
-                className="asset-bg-name-cell py-2 font-body"
+                className="asset-bg-name-cell asset-bg-champion-cell py-2 font-body"
                 style={championRowBackgroundStyle(champion.champion)}
               >
                 <span className="flex items-center gap-2">

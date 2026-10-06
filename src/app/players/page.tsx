@@ -13,7 +13,6 @@ import {
   getTeamSplitOptions,
 } from "@/lib/queries";
 import {
-  getSplitLabel,
   resolveSplitKey,
   type SplitSearchParams,
 } from "@/lib/splits";
@@ -110,7 +109,6 @@ export default async function PlayersPage({
     getPlayerRoleProfiles(splitKey),
     getLckEsportsAssets(),
   ]);
-  const currentSplit = getSplitLabel(splits, splitKey);
   const minimumLeaderboardGames = getMinimumLeaderboardGames(splitKey);
   const leaderboardPlayers = players.filter(
     (player) => player.games_played >= minimumLeaderboardGames,
@@ -123,13 +121,7 @@ export default async function PlayersPage({
 
   return (
     <div className="flex flex-col gap-10">
-      <SplitSelector
-        splits={splits}
-        activeSplitKey={splitKey}
-        basePath="/players"
-      />
-
-      <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <section className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="font-stat text-sm text-ink-muted">Players</p>
           <h1 className="font-display text-5xl font-bold tracking-tight text-ink">
@@ -140,9 +132,11 @@ export default async function PlayersPage({
             split-aware summaries.
           </p>
         </div>
-        <p className="font-stat text-xs text-ink-muted">
-          Scope: {currentSplit}
-        </p>
+        <SplitSelector
+          splits={splits}
+          activeSplitKey={splitKey}
+          basePath="/players"
+        />
       </section>
 
       <section className="grid grid-cols-1 gap-2 md:grid-cols-3 lg:grid-cols-5">
