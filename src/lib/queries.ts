@@ -688,6 +688,8 @@ async function getGameIdsForTeamSplitScope(
   splitKey: string,
 ): Promise<string[] | null> {
   switch (splitKey) {
+    case TEAMS_REGULAR_SEASON_SPLIT_KEY:
+      return (await getLckRegularSeasonGames()).map((game) => game.game_id)
     case 'Cup': {
       const games = await getLckGamesBySplit('Cup')
       const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
@@ -1703,9 +1705,176 @@ function normalizeMatchupGames(games: RawMatchupProfile['games']): MatchupGame[]
   }
 }
 
+async function getPlayerChampionMatchupsForGameIds(
+  gameIds: string[],
+): Promise<PlayerChampionMatchupProfile[]> {
+  const [playerRows, timelineByPlayerGame, objectivesByTeamGame] =
+    await Promise.all([
+      fetchRowsByGameIds<RawScopedPlayerGameStat>(
+        'game_player_stats',
+        'game_id, player_id, team_id, position, champion, result, kills, deaths, assists, dpm, damage_share, vision_score, cspm, players ( name ), teams ( name )',
+        gameIds,
+        ['game_id', 'player_id'],
+      ),
+      getTimeline15ByPlayerGame(gameIds),
+      getObjectivesByTeamGame(gameIds),
+    ])
+
+  type MatchupAccumulator = {
+    player_id: string
+    player: string
+    teams: Set<string>
+    position: PlayerRole
+    champion: string
+    games_played: number
+    wins: number
+    total_kills: number
+    total_deaths: number
+    total_assists: number
+    total_dpm: number
+    total_damage_share: number
+    total_cspm: number
+    total_vision_score: number
+    total_gd15: number
+    total_xpd15: number
+    total_csd15: number
+    timeline_games: number
+    first_bloods: number
+    first_towers: number
+    games: MatchupGame[]
+  }
+
+  const matchups = new Map<string, MatchupAccumulator>()
+
+  for (const row of playerRows) {
+    if (!isPlayerRole(row.position) || !row.champion) continue
+
+    const playerName = normalizeNamedRelation(row.players)?.name ?? row.player_id
+    const teamName = normalizeTeam(row.teams)?.name ?? row.team_id
+    const key = `${row.player_id}:${row.position}:${row.champion}`
+    const accumulator =
+      matchups.get(key) ??
+      ({
+        player_id: row.player_id,
+        player: playerName,
+        teams: new Set<string>(),
+        position: row.position,
+        champion: row.champion,
+        games_played: 0,
+        wins: 0,
+        total_kills: 0,
+        total_deaths: 0,
+        total_assists: 0,
+        total_dpm: 0,
+        total_damage_share: 0,
+        total_cspm: 0,
+        total_vision_score: 0,
+        total_gd15: 0,
+        total_xpd15: 0,
+        total_csd15: 0,
+        timeline_games: 0,
+        first_bloods: 0,
+        first_towers: 0,
+        games: [],
+      } satisfies MatchupAccumulator)
+
+    matchups.set(key, accumulator)
+    accumulator.teams.add(displayTeamName(teamName))
+    accumulator.games_played += 1
+    accumulator.wins += row.result ? 1 : 0
+    accumulator.total_kills += toNumber(row.kills)
+    accumulator.total_deaths += toNumber(row.deaths)
+    accumulator.total_assists += toNumber(row.assists)
+    accumulator.total_dpm += toNumber(row.dpm)
+    accumulator.total_damage_share += toNumber(row.damage_share)
+    accumulator.total_cspm += toNumber(row.cspm)
+    accumulator.total_vision_score += toNumber(row.vision_score)
+    accumulator.games.push({
+      game_id: row.game_id,
+      team_id: row.team_id,
+      result: row.result,
+    })
+
+    const objective = objectivesByTeamGame.get(`${row.game_id}:${row.team_id}`)
+    accumulator.first_bloods += objective?.first_blood ? 1 : 0
+    accumulator.first_towers += objective?.first_tower ? 1 : 0
+
+    const timeline = timelineByPlayerGame.get(`${row.game_id}:${row.player_id}`)
+    if (timeline) {
+      accumulator.timeline_games += 1
+      accumulator.total_gd15 += toNumber(timeline.gold_diff)
+      accumulator.total_xpd15 += toNumber(timeline.xp_diff)
+      accumulator.total_csd15 += toNumber(timeline.cs_diff)
+    }
+  }
+
+  const profiles = Array.from(matchups.values()).map((profile) => {
+    const games = profile.games_played
+    const timelineGames = profile.timeline_games
+
+    return {
+      id: `${profile.player_id}:${profile.position}:${profile.champion}`,
+      player_id: profile.player_id,
+      player: profile.player,
+      team: Array.from(profile.teams).sort().join(' / '),
+      position: profile.position,
+      champion: profile.champion,
+      games_played: games,
+      wins: profile.wins,
+      win_rate_pct: pct(profile.wins, games),
+      total_kills: profile.total_kills,
+      total_deaths: profile.total_deaths,
+      total_assists: profile.total_assists,
+      avg_kills: games > 0 ? round(profile.total_kills / games) : 0,
+      avg_deaths: games > 0 ? round(profile.total_deaths / games) : 0,
+      avg_assists: games > 0 ? round(profile.total_assists / games) : 0,
+      kda:
+        profile.total_deaths > 0
+          ? round(
+              (profile.total_kills + profile.total_assists) /
+                profile.total_deaths,
+              2,
+            )
+          : 0,
+      avg_dpm: games > 0 ? Math.round(profile.total_dpm / games) : 0,
+      avg_damage_share:
+        games > 0 ? round((profile.total_damage_share / games) * 100) : 0,
+      avg_cspm: games > 0 ? round(profile.total_cspm / games) : 0,
+      avg_vision_score:
+        games > 0 ? round(profile.total_vision_score / games) : 0,
+      avg_gd15:
+        timelineGames > 0 ? Math.round(profile.total_gd15 / timelineGames) : 0,
+      avg_xpd15:
+        timelineGames > 0 ? Math.round(profile.total_xpd15 / timelineGames) : 0,
+      avg_csd15:
+        timelineGames > 0 ? round(profile.total_csd15 / timelineGames) : 0,
+      first_blood_pct: pct(profile.first_bloods, games),
+      first_tower_pct: pct(profile.first_towers, games),
+      performance_score: 0,
+      games: profile.games,
+    } satisfies PlayerChampionMatchupProfile
+  })
+
+  return profiles
+    .map((profile) => ({
+      ...profile,
+      performance_score: matchupPerformanceScore(profiles, profile),
+    }))
+    .sort((a, b) => {
+      if (a.player !== b.player) return a.player.localeCompare(b.player)
+      if (b.games_played !== a.games_played) return b.games_played - a.games_played
+      return a.champion.localeCompare(b.champion)
+    })
+}
+
 export async function getPlayerChampionMatchups(
   splitKey = DEFAULT_SPLIT_KEY,
 ): Promise<PlayerChampionMatchupProfile[]> {
+  if (splitKey === TEAMS_REGULAR_SEASON_SPLIT_KEY) {
+    const gameIds = await getGameIdsForTeamSplitScope(splitKey)
+    return getPlayerChampionMatchupsForGameIds(gameIds ?? [])
+  }
+
   const rows = await fetchScopedRows<RawMatchupProfile>(
     'dashboard_player_champion_matchups_by_split',
     'player_id, player, team, position, champion, games_played, wins, win_rate_pct, total_kills, total_deaths, total_assists, avg_kills, avg_deaths, avg_assists, kda, avg_dpm, avg_damage_share, avg_cspm, avg_vision_score, avg_gd15, avg_xpd15, avg_csd15, first_blood_pct, first_tower_pct, games',
@@ -1971,13 +2140,14 @@ type InternalSeries = {
 }
 
 export const TEAMS_CUP_POSTSEASON_SPLIT_KEY = 'cup-play-in-playoffs'
+export const TEAMS_REGULAR_SEASON_SPLIT_KEY = '2026-regular-season'
 export const TEAMS_ROAD_TO_MSI_SPLIT_KEY = 'road-to-msi'
 export const TEAMS_SEASON_POSTSEASON_SPLIT_KEY = 'season-play-in-playoffs'
 
 export const TEAM_SPLIT_OPTIONS: DashboardSplitOption[] = [
   {
     split_key: DEFAULT_SPLIT_KEY,
-    split_label: 'All Splits',
+    split_label: 'All Regional Tournaments',
     source_split: null,
     sort_order: 0,
     games_played: 0,
@@ -1985,17 +2155,17 @@ export const TEAM_SPLIT_OPTIONS: DashboardSplitOption[] = [
     last_game_date: null,
   },
   {
-    split_key: 'Cup',
-    split_label: 'Cup',
-    source_split: 'Cup',
+    split_key: TEAMS_REGULAR_SEASON_SPLIT_KEY,
+    split_label: '2026 Regular Season',
+    source_split: null,
     sort_order: 1,
     games_played: 0,
     first_game_date: null,
     last_game_date: null,
   },
   {
-    split_key: TEAMS_CUP_POSTSEASON_SPLIT_KEY,
-    split_label: 'Play-In and Playoffs',
+    split_key: 'Cup',
+    split_label: 'Cup: Group Stage',
     source_split: 'Cup',
     sort_order: 2,
     games_played: 0,
@@ -2003,10 +2173,19 @@ export const TEAM_SPLIT_OPTIONS: DashboardSplitOption[] = [
     last_game_date: null,
   },
   {
-    split_key: 'Rounds 1-2',
-    split_label: 'Rounds 1-2',
-    source_split: 'Rounds 1-2',
+    split_key: TEAMS_CUP_POSTSEASON_SPLIT_KEY,
+    split_label: 'Cup: Play-In and Playoffs',
+    source_split: 'Cup',
     sort_order: 3,
+    games_played: 0,
+    first_game_date: null,
+    last_game_date: null,
+  },
+  {
+    split_key: 'Rounds 1-2',
+    split_label: '2026 Season: Rounds 1-2',
+    source_split: 'Rounds 1-2',
+    sort_order: 4,
     games_played: 0,
     first_game_date: null,
     last_game_date: null,
@@ -2015,25 +2194,25 @@ export const TEAM_SPLIT_OPTIONS: DashboardSplitOption[] = [
     split_key: TEAMS_ROAD_TO_MSI_SPLIT_KEY,
     split_label: 'Road to MSI',
     source_split: 'Rounds 1-2',
-    sort_order: 4,
-    games_played: 0,
-    first_game_date: null,
-    last_game_date: null,
-  },
-  {
-    split_key: 'Rounds 3-4',
-    split_label: 'Rounds 3-4',
-    source_split: 'Rounds 3-4',
     sort_order: 5,
     games_played: 0,
     first_game_date: null,
     last_game_date: null,
   },
   {
-    split_key: TEAMS_SEASON_POSTSEASON_SPLIT_KEY,
-    split_label: 'Season Play-In and Playoffs',
+    split_key: 'Rounds 3-4',
+    split_label: '2026 Season: Rounds 3-4',
     source_split: 'Rounds 3-4',
     sort_order: 6,
+    games_played: 0,
+    first_game_date: null,
+    last_game_date: null,
+  },
+  {
+    split_key: TEAMS_SEASON_POSTSEASON_SPLIT_KEY,
+    split_label: '2026 Season: Play-In and Playoffs',
+    source_split: 'Rounds 3-4',
+    sort_order: 7,
     games_played: 0,
     first_game_date: null,
     last_game_date: null,
@@ -2144,6 +2323,25 @@ async function getLckGamesBySplit(
   playoffs?: boolean,
 ): Promise<RawHomeGame[]> {
   return getLckGames({ split, playoffs })
+}
+
+function compareLckGamesBySchedule(gameA: RawHomeGame, gameB: RawHomeGame) {
+  return (
+    gameA.game_date.localeCompare(gameB.game_date) ||
+    toNumber(gameA.game_number) - toNumber(gameB.game_number) ||
+    gameA.game_id.localeCompare(gameB.game_id)
+  )
+}
+
+async function getLckRegularSeasonGames(): Promise<RawHomeGame[]> {
+  const [roundsOneTwoGames, roundsThreeFourGames] = await Promise.all([
+    getLckGamesBySplit('Rounds 1-2', false),
+    getLckGamesBySplit('Rounds 3-4', false),
+  ])
+
+  return [...roundsOneTwoGames, ...roundsThreeFourGames].sort(
+    compareLckGamesBySchedule,
+  )
 }
 
 async function getTeamSidesForGames(gameIds: string[]): Promise<RawTeamProfileSide[]> {
@@ -2570,6 +2768,10 @@ async function getTeamSideProfilesFromLckGames(filters: {
   playoffs?: boolean
 }) {
   const games = await getLckGames(filters)
+  return getTeamSideProfilesForLckGames(games)
+}
+
+async function getTeamSideProfilesForLckGames(games: RawHomeGame[]) {
   const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
   const series = buildSeries(games, sides)
 
@@ -2609,6 +2811,8 @@ export async function getTeamPageSideProfiles(
   switch (splitKey) {
     case DEFAULT_SPLIT_KEY:
       return getTeamSideProfilesFromLckGames({})
+    case TEAMS_REGULAR_SEASON_SPLIT_KEY:
+      return getTeamSideProfilesForLckGames(await getLckRegularSeasonGames())
     case 'Cup':
       return getCupGroupTeamSideProfiles()
     case TEAMS_CUP_POSTSEASON_SPLIT_KEY:
@@ -2874,6 +3078,11 @@ export async function getTeamProgression(
   switch (splitKey) {
     case DEFAULT_SPLIT_KEY: {
       const games = await getLckGames({})
+      const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
+      return buildTeamProgressPoints(buildSeries(games, sides))
+    }
+    case TEAMS_REGULAR_SEASON_SPLIT_KEY: {
+      const games = await getLckRegularSeasonGames()
       const sides = await getTeamSidesForGames(games.map((game) => game.game_id))
       return buildTeamProgressPoints(buildSeries(games, sides))
     }

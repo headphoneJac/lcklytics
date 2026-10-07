@@ -258,7 +258,11 @@ const PLAYER_IMAGE_FILE_OVERRIDES: Record<string, string[]> = {
   effort: ['KT.C Effort 2026 Split 1.png'],
   enosh: ['DNS.C Enosh 2026 Split 1.png'],
   faker: ['T1 Faker 2026 LCK Cup.png'],
-  fenrir: ['KT FenRir 2026 LCK Cup.png', 'KT FenRir 2026 Split 1.png'],
+  fenrir: [
+    'KT.C FenRir 2026 Split 1.png',
+    'KT FenRir 2026 LCK Cup.png',
+    'KT FenRir 2026 Split 1.png',
+  ],
   frog: ['DRX.C Frog 2026 Split 1.png'],
   jiwoo: ['DRX Jiwoo 2026 Split 2.png'],
   keria: ['T1 Keria 2026 LCK Cup.png'],

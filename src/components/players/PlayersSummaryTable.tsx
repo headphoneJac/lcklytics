@@ -5,6 +5,7 @@ import type { PlayerRole, PlayerRoleProfile } from "@/lib/types";
 import PlayerAvatar from "@/components/images/PlayerAvatar";
 import TeamLogo from "@/components/images/TeamLogo";
 import type { EsportsAssets } from "@/lib/assets";
+import { getPlayerDisplayTeam } from "@/lib/player-display";
 
 const ROLE_ORDER: PlayerRole[] = ["top", "jng", "mid", "bot", "sup"];
 
@@ -40,7 +41,10 @@ function formatRecord(wins: number, games: number) {
 }
 
 function sortByTeamRole(a: PlayerRoleProfile, b: PlayerRoleProfile) {
-  if (a.team !== b.team) return a.team.localeCompare(b.team);
+  const teamA = getPlayerDisplayTeam(a.player, a.team);
+  const teamB = getPlayerDisplayTeam(b.player, b.team);
+
+  if (teamA !== teamB) return teamA.localeCompare(teamB);
 
   const roleDiff =
     (ROLE_RANK.get(a.position) ?? 0) - (ROLE_RANK.get(b.position) ?? 0);
@@ -126,64 +130,71 @@ export default function PlayersSummaryTable({
             </tr>
           </thead>
           <tbody className="font-stat tabular-nums">
-            {visiblePlayers.map((player) => (
-              <tr
-                key={`${player.player_id}:${player.position}`}
-                className="border-b border-white/5"
-              >
-                <td className="py-2 font-body">
-                  <span className="flex items-center gap-2">
-                    <PlayerAvatar
-                      player={player.player}
-                      team={player.team}
-                      assets={assets}
-                      className="size-8 rounded-full"
-                    />
-                    <span>{player.player}</span>
-                  </span>
-                </td>
-                <td className="py-2 font-body text-ink">
-                  <span className="flex items-center gap-2">
-                    <TeamLogo
-                      team={player.team}
-                      assets={assets}
-                      className="size-7 rounded"
-                    />
-                    <span>{player.team}</span>
-                  </span>
-                </td>
-                <td className="py-2 font-body text-ink-muted">
-                  {ROLE_LABELS[player.position]}
-                </td>
-                <td className="py-2 text-right">{player.games_played}</td>
-                <td className="py-2 text-right text-ink-muted">
-                  {formatRecord(player.wins, player.games_played)}
-                </td>
-                <td className="py-2 text-right text-gold">
-                  {formatPct(player.win_rate_pct)}
-                </td>
-                <td className="py-2 text-right">{player.total_kills}</td>
-                <td className="py-2 text-right text-ink-muted">
-                  {player.total_deaths}
-                </td>
-                <td className="py-2 text-right">{player.total_assists}</td>
-                <td className="py-2 text-right text-gold">
-                  {player.kda.toFixed(2)}
-                </td>
-                <td className="py-2 text-right text-ink-muted">
-                  {player.avg_dpm}
-                </td>
-                <td className="py-2 text-right text-ink-muted">
-                  {player.avg_gd15}
-                </td>
-                <td className="py-2 text-right text-blue-side">
-                  {formatPct(player.first_blood_pct)}
-                </td>
-                <td className="py-2 text-right text-red-side">
-                  {formatPct(player.first_tower_pct)}
-                </td>
-              </tr>
-            ))}
+            {visiblePlayers.map((player) => {
+              const displayTeam = getPlayerDisplayTeam(
+                player.player,
+                player.team,
+              );
+
+              return (
+                <tr
+                  key={`${player.player_id}:${player.position}`}
+                  className="border-b border-white/5"
+                >
+                  <td className="py-2 font-body">
+                    <span className="flex items-center gap-2">
+                      <PlayerAvatar
+                        player={player.player}
+                        team={player.team}
+                        assets={assets}
+                        className="size-8 rounded-full"
+                      />
+                      <span>{player.player}</span>
+                    </span>
+                  </td>
+                  <td className="py-2 font-body text-ink">
+                    <span className="flex items-center gap-2">
+                      <TeamLogo
+                        team={displayTeam}
+                        assets={assets}
+                        className="size-7 rounded"
+                      />
+                      <span>{displayTeam}</span>
+                    </span>
+                  </td>
+                  <td className="py-2 font-body text-ink-muted">
+                    {ROLE_LABELS[player.position]}
+                  </td>
+                  <td className="py-2 text-right">{player.games_played}</td>
+                  <td className="py-2 text-right text-ink-muted">
+                    {formatRecord(player.wins, player.games_played)}
+                  </td>
+                  <td className="py-2 text-right text-gold">
+                    {formatPct(player.win_rate_pct)}
+                  </td>
+                  <td className="py-2 text-right">{player.total_kills}</td>
+                  <td className="py-2 text-right text-ink-muted">
+                    {player.total_deaths}
+                  </td>
+                  <td className="py-2 text-right">{player.total_assists}</td>
+                  <td className="py-2 text-right text-gold">
+                    {player.kda.toFixed(2)}
+                  </td>
+                  <td className="py-2 text-right text-ink-muted">
+                    {player.avg_dpm}
+                  </td>
+                  <td className="py-2 text-right text-ink-muted">
+                    {player.avg_gd15}
+                  </td>
+                  <td className="py-2 text-right text-blue-side">
+                    {formatPct(player.first_blood_pct)}
+                  </td>
+                  <td className="py-2 text-right text-red-side">
+                    {formatPct(player.first_tower_pct)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -19,6 +19,6 @@ export function getSplitLabel(
 ) {
   return (
     splits.find((split) => split.split_key === splitKey)?.split_label ??
-    'All Splits'
+    'All Regional Tournaments'
   )
 }

@@ -39,6 +39,7 @@ import {
 import { getLckEsportsAssets } from "@/lib/esports-assets";
 import {
   DEFAULT_SPLIT_KEY,
+  TEAMS_REGULAR_SEASON_SPLIT_KEY,
   getChampionProfiles,
   getDraftPressureTargets,
   getObjectiveInsightStats,
@@ -54,6 +55,23 @@ import {
 } from "@/lib/splits";
 import type { TeamProgressPoint, TeamSideProfile } from "@/lib/types";
 
+function getProgressionTeamNames(
+  progression: TeamProgressPoint[],
+  orderedTeamNames: string[],
+) {
+  return Array.from(
+    new Set(progression.flatMap((point) => Object.keys(point.values))),
+  ).sort((a, b) => {
+    const indexA = orderedTeamNames.indexOf(a);
+    const indexB = orderedTeamNames.indexOf(b);
+
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 export default async function AnalysisPage({
   searchParams,
 }: {
@@ -64,6 +82,9 @@ export default async function AnalysisPage({
   const splitKey = splits.some((split) => split.split_key === requestedSplitKey)
     ? requestedSplitKey
     : DEFAULT_SPLIT_KEY;
+  const isRegularSeasonSplit = splitKey === TEAMS_REGULAR_SEASON_SPLIT_KEY;
+  const needsRoundsOneTwoBaseline =
+    splitKey === ROUNDS_3_4_SPLIT_KEY || isRegularSeasonSplit;
 
   const [
     teams,
@@ -73,6 +94,8 @@ export default async function AnalysisPage({
     teamSignalContexts,
     roundsOneTwoTeams,
     roundsOneTwoProgression,
+    regularRoundsThreeFourTeams,
+    regularRoundsThreeFourProgression,
     objectiveInsights,
     draftPressureTargets,
     esportsAssets,
@@ -82,11 +105,17 @@ export default async function AnalysisPage({
     getChampionProfiles(splitKey),
     getTeamProgression(splitKey),
     getTeamSignalContexts(splitKey),
-    splitKey === ROUNDS_3_4_SPLIT_KEY
+    needsRoundsOneTwoBaseline
       ? getTeamPageSideProfiles("Rounds 1-2")
       : Promise.resolve([] as TeamSideProfile[]),
-    splitKey === ROUNDS_3_4_SPLIT_KEY
+    needsRoundsOneTwoBaseline
       ? getTeamProgression("Rounds 1-2")
+      : Promise.resolve([] as TeamProgressPoint[]),
+    isRegularSeasonSplit
+      ? getTeamPageSideProfiles(ROUNDS_3_4_SPLIT_KEY)
+      : Promise.resolve([] as TeamSideProfile[]),
+    isRegularSeasonSplit
+      ? getTeamProgression(ROUNDS_3_4_SPLIT_KEY)
       : Promise.resolve([] as TeamProgressPoint[]),
     getObjectiveInsightStats(splitKey),
     getDraftPressureTargets(splitKey),
@@ -114,28 +143,41 @@ export default async function AnalysisPage({
       : teams;
   const matchOrderedTeams = sortTeamsByMatchRecord(standingsTeams);
   const matchOrderedTeamNames = matchOrderedTeams.map((team) => team.team);
-  const progressionTeams = Array.from(
-    new Set(teamProgression.flatMap((point) => Object.keys(point.values))),
-  ).sort((a, b) => {
-    const indexA = matchOrderedTeamNames.indexOf(a);
-    const indexB = matchOrderedTeamNames.indexOf(b);
-
-    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-    if (indexA !== -1) return -1;
-    if (indexB !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  const progressionTeams = getProgressionTeamNames(
+    teamProgression,
+    matchOrderedTeamNames,
+  );
+  const roundsOneTwoMatchOrderedTeams =
+    sortTeamsByMatchRecord(roundsOneTwoTeams);
+  const roundsOneTwoProgressionTeams = getProgressionTeamNames(
+    roundsOneTwoProgression,
+    roundsOneTwoMatchOrderedTeams.map((team) => team.team),
+  );
+  const roundsOneTwoPlacementChartProgression =
+    buildPlacementChartProgression(roundsOneTwoProgression, "Rounds 1-2");
   const placementChartProgression = buildPlacementChartProgression(
     teamProgression,
     splitKey,
     roundsOneTwoProgression,
   );
+  const regularSeasonGroupTeams = isRegularSeasonSplit
+    ? mergeTeamSideProfiles(roundsOneTwoTeams, regularRoundsThreeFourTeams)
+    : standingsTeams;
+  const regularSeasonGroupProgression = isRegularSeasonSplit
+    ? buildPlacementChartProgression(
+        regularRoundsThreeFourProgression,
+        ROUNDS_3_4_SPLIT_KEY,
+        roundsOneTwoProgression,
+      )
+    : placementChartProgression;
   const teamGroupSections =
-    splitKey === ROUNDS_3_4_SPLIT_KEY
+    splitKey === ROUNDS_3_4_SPLIT_KEY || isRegularSeasonSplit
       ? ROUNDS_3_4_GROUPS.map((group) => {
           const groupTeamNames = new Set<string>(group.teams);
           const groupTeams = sortTeamsByMatchRecord(
-            standingsTeams.filter((team) => groupTeamNames.has(team.team)),
+            regularSeasonGroupTeams.filter((team) =>
+              groupTeamNames.has(team.team),
+            ),
           );
           const groupProgressionTeams = groupTeams.map((team) => team.team);
 
@@ -144,7 +186,7 @@ export default async function AnalysisPage({
             teams: groupTeams,
             progressionTeams: groupProgressionTeams,
             progression: buildGroupedProgressionPoints(
-              placementChartProgression,
+              regularSeasonGroupProgression,
               groupProgressionTeams,
             ),
           };
@@ -194,7 +236,8 @@ export default async function AnalysisPage({
   const placementChartTickStep =
     splitKey === DEFAULT_SPLIT_KEY ||
     splitKey === "Rounds 1-2" ||
-    splitKey === ROUNDS_3_4_SPLIT_KEY
+    splitKey === ROUNDS_3_4_SPLIT_KEY ||
+    isRegularSeasonSplit
       ? 10
       : undefined;
 
@@ -350,7 +393,12 @@ export default async function AnalysisPage({
             accentClass="text-silver"
           />
         </div>
-        {hasTeamGroupSections ? (
+        {isRegularSeasonSplit ? (
+          <TeamFormPickOrderTable
+            teams={roundsOneTwoMatchOrderedTeams}
+            assets={esportsAssets}
+          />
+        ) : hasTeamGroupSections ? (
           <div className="flex flex-col gap-8">
             {teamGroupSections.map((group) => (
               <div key={group.name} className="flex flex-col gap-5">
@@ -376,6 +424,42 @@ export default async function AnalysisPage({
           />
         )}
       </section>
+
+      {isRegularSeasonSplit ? (
+        <section className="flex flex-col gap-5">
+          <SectionHeader
+            eyebrow="Teams"
+            title="Team Placement Over Matches"
+            description="Standings placement after each loaded match in the selected scope, ranked by match record first and game record second."
+          />
+          <TeamProgressChart
+            points={roundsOneTwoPlacementChartProgression}
+            teams={roundsOneTwoProgressionTeams}
+            matchOrderTickStep={10}
+          />
+        </section>
+      ) : null}
+
+      {isRegularSeasonSplit ? (
+        <section className="flex flex-col gap-8">
+          {teamGroupSections.map((group) => (
+            <div key={group.name} className="flex flex-col gap-5">
+              <h3 className="font-display text-2xl font-bold tracking-tight text-ink">
+                {group.name}
+              </h3>
+              <TeamFormPickOrderTable
+                teams={group.teams}
+                assets={esportsAssets}
+              />
+              <TeamProgressChart
+                points={group.progression}
+                teams={group.progressionTeams}
+                matchOrderTickStep={placementChartTickStep}
+              />
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       {showPlacementChart && !hasTeamGroupSections ? (
         <section className="flex flex-col gap-5">

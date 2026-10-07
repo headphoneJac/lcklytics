@@ -1,17 +1,27 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import NavLinks from "@/components/NavLinks";
+import { links } from "@/components/nav-links";
 
-const links = [
-  { href: "/", label: "Home" },
-  { href: "/analysis", label: "Analysis" },
-  { href: "/teams", label: "Teams" },
-  { href: "/players", label: "Players" },
-  { href: "/champions", label: "Champions" },
-  { href: "/matchups", label: "Matchups" },
-];
+function StaticNavLinks() {
+  return (
+    <>
+      {links.map((link) => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className="transition-colors hover:text-ink"
+        >
+          {link.label}
+        </Link>
+      ))}
+    </>
+  );
+}
 
 export default function NavBar() {
   return (
-    <header className="border-b border-white/10">
+    <header className="sticky top-0 z-50 border-b border-white/10 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Link
           href="/"
@@ -20,15 +30,9 @@ export default function NavBar() {
           lcklytics
         </Link>
         <nav className="flex gap-6 text-sm text-ink-muted">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="transition-colors hover:text-ink"
-            >
-              {link.label}
-            </Link>
-          ))}
+          <Suspense fallback={<StaticNavLinks />}>
+            <NavLinks />
+          </Suspense>
         </nav>
       </div>
     </header>
